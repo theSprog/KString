@@ -29,4 +29,3 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         files: ./tests/coverage/kstring_coverage.info
-        token: ${{ secrets.CODECOV_TOKEN }}
