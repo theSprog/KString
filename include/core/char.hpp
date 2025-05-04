@@ -32,18 +32,17 @@ class KChar {
         ByteVec tmp;
         for (int i = 0; i < 4 && utf8[i]; ++i) tmp.push_back(static_cast<uint8_t>(utf8[i]));
 
-        CodePoint cp;
-        std::size_t next;
-        if (! internal::utf8::decode(tmp, 0, cp, next)) {
+        internal::utf8::UTF8Decoded decode_result = internal::utf8::decode(tmp, 0);
+        if (! decode_result.ok) {
             throw std::invalid_argument("Invalid UTF-8 character passed to KChar");
         }
 
         // 必须是完整单字符
-        if (utf8[next] != '\0') {
+        if (utf8[decode_result.next_pos] != '\0') {
             throw std::invalid_argument("Too many bytes: KChar must be a single UTF-8 character");
         }
 
-        *this = KChar(cp);
+        *this = KChar(decode_result.cp);
     }
 
     CodePoint value() const {

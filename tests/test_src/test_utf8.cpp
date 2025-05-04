@@ -51,11 +51,10 @@ TEST_CASE("encode and decode") {
     CHECK(encoded.bytes[0] == 0xE4);
 
     ByteVec data(encoded.begin(), encoded.end());
-    CodePoint decoded;
-    std::size_t next;
-    CHECK(decode(data, 0, decoded, next));
-    CHECK(decoded == cp);
-    CHECK(next == 3);
+    UTF8Decoded decode_result = decode(data, 0);
+    CHECK(decode_result.ok);
+    CHECK(decode_result.cp == cp);
+    CHECK(decode_result.next_pos == 3);
 
     UTF8Encoded enc2 = encode(0x07FF); // 2 bytes
     CHECK(enc2.len == 2);
@@ -68,21 +67,18 @@ TEST_CASE("encode and decode") {
 
 TEST_CASE("decode detail") {
     ByteVec data = {static_cast<Byte>(0xC3), static_cast<Byte>(0xA9)}; // é
-    CodePoint cp;
-    std::size_t next;
-    CHECK(decode(data, 0, cp, next));
-    CHECK(cp == 0xE9); // 'é'
-    CHECK(next == 2);
+    UTF8Decoded decode_result = decode(data, 0);
+    CHECK(decode_result.ok);
+    CHECK(decode_result.cp == 0xE9); // 'é'
+    CHECK(decode_result.next_pos == 2);
 
     ByteVec data2 = {static_cast<Byte>(0xFF)}; // invalid
-    CodePoint cp2;
-    std::size_t next2;
-    CHECK_FALSE(decode(data2, 0, cp2, next2));
+    UTF8Decoded decode_result2 = decode(data2, 0);
+    CHECK_FALSE(decode_result2.ok);
 
     ByteVec data3 = {static_cast<Byte>(0xE0), static_cast<Byte>(0x20), static_cast<Byte>(0x20)}; // second byte invalid
-    CodePoint cp3;
-    std::size_t next3;
-    CHECK_FALSE(decode(data3, 0, cp3, next3));
+    UTF8Decoded decode_result3 = decode(data3, 0);
+    CHECK_FALSE(decode_result3.ok);
 }
 
 TEST_CASE("char_count") {
@@ -136,14 +132,16 @@ TEST_CASE("replace_all - diff > 0 (1-byte to 4-byte)") {
     ByteVec data = {'A', 'B', 'C'};
     replace_all(data, 'B', 0x1F600); // 😀
     CHECK(data.size() > 3);          // 变长
-    std::size_t next;
-    CodePoint cp;
-    CHECK(decode(data, 0, cp, next));
-    CHECK(cp == 'A');
-    CHECK(decode(data, next, cp, next)); // 😀
-    CHECK(cp == 0x1F600);                // 😀
-    CHECK(decode(data, next, cp, next));
-    CHECK(cp == 'C');
+    UTF8Decoded decode_result;
+    decode_result = decode(data, 0);
+    CHECK(decode_result.ok);
+    CHECK(decode_result.cp == 'A');
+    decode_result = decode(data, decode_result.next_pos);
+    CHECK(decode_result.ok);            // 😀
+    CHECK(decode_result.cp == 0x1F600); // 😀
+    decode_result = decode(data, decode_result.next_pos);
+    CHECK(decode_result.ok);
+    CHECK(decode_result.cp == 'C');
 }
 
 TEST_CASE("replace_all - diff < 0 (4-byte to 1-byte)") {
@@ -160,54 +158,33 @@ TEST_CASE("replace_all - diff < 0 (4-byte to 1-byte)") {
 }
 
 TEST_CASE("decode_one: valid UTF-8 single characters") {
-    CodePoint cp;
 
     SUBCASE("ASCII - 'A'") {
         ByteVec data = {'A'};
-        CHECK(decode_one(data, 0, cp));
-        CHECK(cp == 'A');
+        UTF8Decoded decode_result = decode(data, 0);
+        CHECK(decode_result.ok);
+        CHECK(decode_result.cp == 'A');
     }
 
     SUBCASE("2-byte character - U+00A9 (©)") {
         ByteVec data = {0xC2, 0xA9}; // ©
-        CHECK(decode_one(data, 0, cp));
-        CHECK(cp == 0x00A9);
+        UTF8Decoded decode_result = decode(data, 0);
+        CHECK(decode_result.ok);
+        CHECK(decode_result.cp == 0x00A9);
     }
 
     SUBCASE("3-byte character - U+20AC (€)") {
         ByteVec data = {0xE2, 0x82, 0xAC}; // €
-        CHECK(decode_one(data, 0, cp));
-        CHECK(cp == 0x20AC);
+        UTF8Decoded decode_result = decode(data, 0);
+        CHECK(decode_result.ok);
+        CHECK(decode_result.cp == 0x20AC);
     }
 
     SUBCASE("4-byte character - U+1F601 (😁)") {
         ByteVec data = {0xF0, 0x9F, 0x98, 0x81}; // 😁
-        CHECK(decode_one(data, 0, cp));
-        CHECK(cp == 0x1F601);
-    }
-}
-
-TEST_CASE("decode_one: invalid sequences") {
-    CodePoint cp;
-
-    SUBCASE("Invalid continuation byte") {
-        ByteVec data = {0xE2, 0x28, 0xA1}; // Invalid continuation
-        CHECK_FALSE(decode_one(data, 0, cp));
-    }
-
-    SUBCASE("Overlong encoding of ASCII 'A'") {
-        ByteVec data = {0xC1, 0x81}; // Overlong encoding of U+0041
-        CHECK_FALSE(decode_one(data, 0, cp));
-    }
-
-    SUBCASE("Truncated input") {
-        ByteVec data = {0xF0}; // 4-byte start but missing rest
-        CHECK_FALSE(decode_one(data, 0, cp));
-    }
-
-    SUBCASE("Surrogate range (invalid in UTF-8)") {
-        ByteVec data = {0xED, 0xA0, 0x80}; // U+D800
-        CHECK_FALSE(decode_one(data, 0, cp));
+        UTF8Decoded decode_result = decode(data, 0);
+        CHECK(decode_result.ok);
+        CHECK(decode_result.cp == 0x1F601);
     }
 }
 
@@ -222,5 +199,95 @@ TEST_CASE("debug_codepoint") {
     std::string result = debug_codepoint(0x4F60);
     bool valid_result = (result == "\xE4\xBD\xA0") || (result == "\\xE4\\xBD\\xA0");
     CHECK(valid_result);
+}
+
+TEST_CASE("decode_all - basic ascii and utf8") {
+    ByteVec data = {'h', 'e', static_cast<Byte>(0xE4), static_cast<Byte>(0xBD), static_cast<Byte>(0xA0)}; // he你
+    auto result = decode_all(data);
+    REQUIRE(result.size() == 3);
+    CHECK(result[0].ok);
+    CHECK(result[0].cp == 'h');
+    CHECK(result[1].cp == 'e');
+    CHECK(result[2].cp == 0x4F60); // 你
+}
+
+TEST_CASE("decode_all - illegal bytes in middle") {
+    ByteVec data = {'A', 0xFF, 'B'};
+    auto result = decode_all(data);
+    REQUIRE(result.size() == 3);
+    CHECK(result[0].ok);
+    CHECK_FALSE(result[1].ok); // 0xFF is illegal lead
+    CHECK(result[2].ok);
+}
+
+TEST_CASE("decode_all - continuation byte alone") {
+    ByteVec data = {static_cast<Byte>(0x80)}; // continuation without leader
+    auto result = decode_all(data);
+    REQUIRE(result.size() == 1);
+    CHECK_FALSE(result[0].ok);
+}
+
+TEST_CASE("decode_all - overlong encoding") {
+    ByteVec data = {static_cast<Byte>(0xC0), static_cast<Byte>(0xAF)}; // overlong '/'
+    auto result = decode_all(data);
+    REQUIRE(result.size() == 2);    // 两个非法字节
+    CHECK_FALSE(result[0].ok);
+    CHECK_FALSE(result[1].ok);
+}
+
+TEST_CASE("decode_all - empty input") {
+    ByteVec data;
+    auto result = decode_all(data);
+    CHECK(result.empty());
+}
+
+TEST_CASE("decode_range - normal range") {
+    ByteVec data = {'x', static_cast<Byte>(0xE4), static_cast<Byte>(0xBD), static_cast<Byte>(0xA0), 'y'}; // x你y
+    auto result = decode_range(data, 0, data.size());
+    REQUIRE(result.size() == 3);
+    CHECK(result[0].cp == 'x');
+    CHECK(result[1].cp == 0x4F60);
+    CHECK(result[2].cp == 'y');
+}
+
+TEST_CASE("decode_range - normal range") {
+    ByteVec data = {'x', static_cast<Byte>(0xFF), 'y'}; // x<?>y
+    auto result = decode_range(data, 0, data.size());
+    REQUIRE(result.size() == 3);
+    CHECK(result[0].cp == 'x');
+    CHECK_FALSE(result[1].ok);
+    CHECK(result[2].cp == 'y');
+}
+
+TEST_CASE("decode_range - truncated at utf8 boundary") {
+    ByteVec data = {'a', static_cast<Byte>(0xF0), static_cast<Byte>(0x9F), static_cast<Byte>(0x98), static_cast<Byte>(0x81)}; // a😁
+    auto result = decode_range(data, 0, 4); // only a + first 3 bytes of 😁
+    REQUIRE(result.size() == 2);
+    CHECK(result[0].ok);
+    CHECK_FALSE(result[1].ok); // 😁 被截断了
+}
+
+TEST_CASE("decode_range - start > end") {
+    ByteVec data = {'a', 'b', 'c'};
+    auto result = decode_range(data, 3, 2); // invalid range
+    CHECK(result.empty());
+}
+
+TEST_CASE("decode_range - end beyond data") {
+    ByteVec data = {'A', 'B'};
+    auto result = decode_range(data, 0, 100);
+    REQUIRE(result.size() == 2);
+    CHECK(result[0].ok);
+    CHECK(result[1].ok);
+}
+
+TEST_CASE("decode_range - start beyond data") {
+    ByteVec data = {'A'};
+    auto result = decode_range(data, 100, 200);
+    CHECK(result.empty());
+}
+
+TEST_CASE("UTF8Decoded construct with true") {
+    CHECK_THROWS_AS(UTF8Decoded fail_construct(true), std::runtime_error);
 }
 

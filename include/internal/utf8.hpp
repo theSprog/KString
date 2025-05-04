@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -12,9 +13,6 @@ using ByteVec = std::vector<Byte>;
 using CodePoint = uint32_t;
 
 struct UTF8Encoded {
-    uint8_t bytes[4];
-    std::size_t len;
-
     const uint8_t* begin() const {
         return bytes;
     }
@@ -23,11 +21,26 @@ struct UTF8Encoded {
         return bytes + len;
     }
 
-    size_t size() const {
-        return len;
-    }
+    uint8_t bytes[4];
+    std::size_t len;
 };
 
+struct UTF8Decoded {
+    CodePoint cp;
+    bool ok;
+    size_t next_pos;
+
+    UTF8Decoded() : cp(0), ok(false), next_pos(0) {}
+
+    // ok must be false
+    UTF8Decoded(bool ok) : cp(0), ok(ok), next_pos(0) {
+        if (ok) {
+            throw std::runtime_error("Cannot init UTF8Decoded with bool true");
+        }
+    }
+
+    UTF8Decoded(CodePoint cp, size_t next_pos) : cp(cp), ok(true), next_pos(next_pos) {}
+};
 
 namespace {
 // 获取当前字节起始的 UTF-8 编码的总长度（若非法则返回 0）
@@ -122,7 +135,7 @@ inline UTF8Encoded encode(CodePoint cp) {
 }
 
 // 尝试解码 data[pos...] 开头的字符（失败时返回 false）, next_pos 存放解码后应处的 pos
-inline bool decode(const ByteVec& data, std::size_t pos, CodePoint& out_cp, std::size_t& next_pos) {
+inline UTF8Decoded decode(const ByteVec& data, std::size_t pos) {
     if (pos >= data.size()) return false;
 
     Byte lead = data[pos];
@@ -163,25 +176,64 @@ inline bool decode(const ByteVec& data, std::size_t pos, CodePoint& out_cp, std:
     if (cp >= 0xD800 && cp <= 0xDFFF) return false;
     if (cp > 0x10FFFF) return false;
 
-    out_cp = cp;
-    next_pos = pos + len;
-    return true;
+    return UTF8Decoded(cp, pos + len);
 }
 
-inline bool decode_one(const ByteVec& data, std::size_t pos, CodePoint& out_cp) {
-    std::size_t dummy;
-    return decode(data, pos, out_cp, dummy);
+inline std::vector<UTF8Decoded> decode_all(const ByteVec& data) {
+    std::vector<UTF8Decoded> results;
+    std::size_t pos = 0;
+
+    while (pos < data.size()) {
+        UTF8Decoded decode_result = decode(data, pos);
+        results.push_back(decode_result);
+
+        if (! decode_result.ok) {
+            // 出错时只前进 1 字节，避免死循环
+            ++pos;
+        } else {
+            pos = decode_result.next_pos;
+        }
+    }
+
+    return results;
+}
+
+// decode range [start, end)
+inline std::vector<UTF8Decoded> decode_range(const ByteVec& data, size_t start, size_t end) {
+    std::vector<UTF8Decoded> results;
+
+    if (start >= end) return results;
+    if (start > data.size()) start = data.size();
+    if (end > data.size()) end = data.size();
+
+    std::size_t pos = start;
+    while (pos < end) {
+        UTF8Decoded decode_result = decode(data, pos);
+
+        if (decode_result.ok && decode_result.next_pos <= end) {
+            results.push_back(decode_result);
+            pos = decode_result.next_pos;
+        } else {
+            // 解码失败 / next_pos 越界都视为非法
+            results.emplace_back(false); // UTF8Decoded(false)
+            if (! decode_result.ok)      // 解码失败只前进一步
+                ++pos;
+            else // next_pos 越界则 pos 直接越界
+                pos = decode_result.next_pos;
+        }
+    }
+
+    return results;
 }
 
 // 查找字符数（不是字节数）
 inline std::size_t char_count(const ByteVec& data) {
     std::size_t count = 0;
     for (std::size_t pos = 0; pos < data.size();) {
-        CodePoint cp;
-        std::size_t next;
-        if (! decode(data, pos, cp, next)) break;
-        pos = next;
+        UTF8Decoded decode_result = decode(data, pos);
+        if (! decode_result.ok) break;
         ++count;
+        pos = decode_result.next_pos;
     }
     return count;
 }
@@ -190,25 +242,23 @@ inline std::size_t char_count(const ByteVec& data) {
 inline std::size_t find(const ByteVec& data, CodePoint target_codepoint) {
     std::size_t index = 0;
     for (std::size_t pos = 0; pos < data.size();) {
-        CodePoint cp;
-        std::size_t next;
-        if (! decode(data, pos, cp, next)) break;
-        if (cp == target_codepoint) return index;
-        pos = next;
+        UTF8Decoded decode_result = decode(data, pos);
+        if (! decode_result.ok) break;
+        if (decode_result.cp == target_codepoint) return index;
+        pos = decode_result.next_pos;
         ++index;
     }
     return static_cast<std::size_t>(-1);
 }
 
 inline void replace_at(ByteVec& data, size_t index, CodePoint cp_new) {
-    CodePoint old_cp;
-    std::size_t next_pos;
-
-    if (! decode(data, index, old_cp, next_pos)) return;
+    UTF8Decoded decode_result = decode(data, index);
+    if (! decode_result.ok) return;
+    std::size_t next_pos = decode_result.next_pos;
 
     std::size_t old_len = next_pos - index;
     UTF8Encoded encoded = encode(cp_new);
-    std::size_t new_len = encoded.size();
+    std::size_t new_len = encoded.len;
 
     if (old_len == new_len) {
         // 快路径：直接写入
@@ -240,16 +290,15 @@ inline void replace_at(ByteVec& data, size_t index, CodePoint cp_new) {
 
 inline void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
     std::size_t pos = 0;
-    CodePoint cp;
-    std::size_t next;
-
     UTF8Encoded encoded = encode(cp_new); // 预编码 cp_new，避免重复计算
-    std::size_t new_len = encoded.size();
+    std::size_t new_len = encoded.len;
 
     while (pos < data.size()) {
-        if (! decode(data, pos, cp, next)) break;
+        UTF8Decoded decode_result = decode(data, pos);
+        if (! decode_result.ok) break;
+        std::size_t next = decode_result.next_pos;
 
-        if (cp == cp_old) {
+        if (decode_result.cp == cp_old) {
             std::size_t old_len = next - pos;
             std::ptrdiff_t diff = static_cast<std::ptrdiff_t>(new_len) - static_cast<std::ptrdiff_t>(old_len);
 
@@ -286,18 +335,16 @@ inline void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
 
 inline void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
     std::size_t pos = 0;
-    CodePoint cp;
-    std::size_t next;
-
     while (pos < data.size()) {
-        if (! decode(data, pos, cp, next)) break;
+        UTF8Decoded decode_result = decode(data, pos);
+        if (! decode_result.ok) break;
 
-        if (cp == cp_old) {
+        if (decode_result.cp == cp_old) {
             replace_at(data, pos, cp_new);
             return;
         }
 
-        pos = next;
+        pos = decode_result.next_pos;
     }
 }
 
