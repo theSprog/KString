@@ -1,0 +1,1 @@
+[![Build Status](https://github.com/theSprog/KString/actions/workflows/ci.yml/badge.svg)](https://github.com/theSprog/KString/actions) [![codecov](https://codecov.io/gh/theSprog/KString/graph/badge.svg?token=UH1G9UN76D)](https://codecov.io/gh/theSprog/KString) 
