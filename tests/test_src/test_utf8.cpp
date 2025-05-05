@@ -291,3 +291,18 @@ TEST_CASE("UTF8Decoded construct with true") {
     CHECK_THROWS_AS(UTF8Decoded fail_construct(true), std::runtime_error);
 }
 
+TEST_CASE("print UTF8Encoded & UTF8Decoded") {
+    UTF8Encoded printable = encode(0x4F60);
+    std::ostringstream oss;
+    oss << printable;
+    CHECK(oss.str() == "UTF8Encoded{len=3, bytes=[0xE4 0xBD 0xA0]}");
+
+    UTF8Decoded ok(0x4F60, 3); // '你'
+    UTF8Decoded err(false);
+    std::ostringstream oss1, oss2;
+    oss1 << ok;
+    oss2 << err;
+    CHECK(oss1.str() == "UTF8Decoded{cp=U+4F60, next_pos=3, ok=true}");
+    CHECK(oss2.str() == "UTF8Decoded{<invalid>}");
+}
+

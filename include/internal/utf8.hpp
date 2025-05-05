@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <iostream>
 
 namespace internal {
 namespace utf8 {
@@ -23,6 +24,16 @@ struct UTF8Encoded {
 
     uint8_t bytes[4];
     std::size_t len;
+
+    friend std::ostream& operator<<(std::ostream& os, const UTF8Encoded& d) {
+        os << "UTF8Encoded{len=" << d.len << ", bytes=[";
+        for (std::size_t i = 0; i < d.len; ++i) {
+            if (i > 0) os << ' ';
+            os << "0x" << std::hex << std::uppercase << static_cast<int>(d.bytes[i]);
+        }
+        os << "]}";
+        return os;
+    }
 };
 
 struct UTF8Decoded {
@@ -40,6 +51,17 @@ struct UTF8Decoded {
     }
 
     UTF8Decoded(CodePoint cp, size_t next_pos) : cp(cp), ok(true), next_pos(next_pos) {}
+
+    friend std::ostream& operator<<(std::ostream& os, const UTF8Decoded& d) {
+    if (d.ok) {
+        os << "UTF8Decoded{cp=U+" << std::hex << std::uppercase << d.cp
+           << ", next_pos=" << std::dec << d.next_pos << ", ok=true}";
+    } else {
+        os << "UTF8Decoded{<invalid>}";
+    }
+    return os;
+}
+
 };
 
 namespace {

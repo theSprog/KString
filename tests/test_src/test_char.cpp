@@ -98,6 +98,13 @@ TEST_CASE("to_lower fall-through branch") {
     CHECK(result == non_upper);  // 分支覆盖：return *this;
 }
 
+TEST_CASE("print printable char") {
+    KChar printable("😁");
+    std::ostringstream oss;
+    oss << printable;
+    CHECK(oss.str() == "😁");
+}
+
 TEST_CASE("Rejects valid UTF-8 prefix with trailing data") {
     // 😁 = 4 bytes, 后面还有 'x'
     const char* aaaa = "😁x";

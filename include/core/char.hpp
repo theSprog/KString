@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include <ostream>
 #include <stdexcept>
 #include "../internal/utf8.hpp"
 
@@ -25,12 +26,12 @@ class KChar {
     }
 
     // 从 UTF-8 单字符构造，如 KChar("😁")
-    explicit KChar(const char* utf8) : value_(0) {
-        if (! utf8) throw std::invalid_argument("Null pointer passed to KChar");
+    explicit KChar(const char* bytes) : value_(0) {
+        if (! bytes) throw std::invalid_argument("Null pointer passed to KChar");
 
         // 拷贝最多前 4 个字节（UTF-8 单字符最大长度）
         ByteVec tmp;
-        for (int i = 0; i < 4 && utf8[i]; ++i) tmp.push_back(static_cast<uint8_t>(utf8[i]));
+        for (int i = 0; i < 4 && bytes[i]; ++i) tmp.push_back(static_cast<uint8_t>(bytes[i]));
 
         internal::utf8::UTF8Decoded decode_result = internal::utf8::decode(tmp, 0);
         if (! decode_result.ok) {
@@ -38,7 +39,7 @@ class KChar {
         }
 
         // 必须是完整单字符
-        if (utf8[decode_result.next_pos] != '\0') {
+        if (bytes[decode_result.next_pos] != '\0') {
             throw std::invalid_argument("Too many bytes: KChar must be a single UTF-8 character");
         }
 
@@ -123,6 +124,12 @@ class KChar {
         char buf[8];
         std::snprintf(buf, sizeof(buf), "U+%04X", value_);
         return std::string(buf);
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const KChar& kchar) {
+        internal::utf8::UTF8Encoded encoded = internal::utf8::encode(kchar.value_);
+        os << std::string(encoded.begin(), encoded.end());
+        return os;
     }
 };
 } // namespace KString
