@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 # coverage 临时合并文件
 MERGED_COVERAGE="coverage/merged.info"
 # 最终 coverage 文件
-FINAL_COVERAGE="coverage/kstring_coverage.info"
+FINAL_COVERAGE="coverage/coverage.info"
 
 # 如果存在旧的 merged.info，先删除
 rm -f "$MERGED_COVERAGE"
@@ -35,7 +35,7 @@ if [ $# -eq 0 ]; then
   done
   mv "$MERGED_COVERAGE" "$FINAL_COVERAGE"
   echo ">>> Merged coverage saved to $FINAL_COVERAGE"
-  genhtml coverage/kstring_coverage.info --output-directory coverage/kstring --ignore-errors inconsistent
+  genhtml coverage/coverage.info --output-directory coverage/kstring --ignore-errors inconsistent
 else
   # 如果传入了测试名，简单运行该测试
   name="$1"

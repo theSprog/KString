@@ -28,4 +28,4 @@ jobs:
     - name: Upload coverage report to Codecov
       uses: codecov/codecov-action@v5
       with:
-        files: ./tests/coverage/kstring_coverage.info
+        files: ./tests/coverage/coverage.info
