@@ -4,4 +4,6 @@
 
 using KString::SSOBytes;
 
-TEST_CASE("FIXME") {}
+TEST_CASE("FIXME") {
+    SSOBytes();
+}
