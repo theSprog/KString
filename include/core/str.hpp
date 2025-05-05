@@ -417,10 +417,8 @@ class KStr {
         auto pair = split_at(mid);
         const ByteSpan right_bytes = pair.second.as_bytes();
 
-        if (right_bytes.empty()) {
-            return {pair.first, KStr()};
-        }
-
+        assert(!right_bytes.empty());
+        
         std::size_t skip = 0;
         auto dec = internal::utf8::decode(right_bytes, skip);
         std::size_t skip_len = dec.ok ? dec.next_pos : 1;
