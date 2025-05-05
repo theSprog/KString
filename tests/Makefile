@@ -11,7 +11,8 @@ CXXFLAGS += -Werror=uninitialized \
     -Wmissing-declarations \
     -Wold-style-cast \
     -Werror=vla \
-    -Wnon-virtual-dtor
+    -Wnon-virtual-dtor \
+	-Wreturn-local-addr
 CXXFLAGS += -fsanitize=address,undefined,bounds
 
 LDFLAGS :=
