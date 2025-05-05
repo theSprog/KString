@@ -1,4 +1,3 @@
-
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 #include "../../include/core/char.hpp"
@@ -26,7 +25,7 @@ TEST_CASE("KChar::is_ascii and related checks") {
     CHECK(!a.is_lower());
     CHECK(!a.is_digit());
     CHECK(a.is_alnum());
-    CHECK(!a.is_space());
+    CHECK(!a.is_whitespace());
     CHECK(a.is_printable());
 
     KChar d('0');
@@ -34,10 +33,10 @@ TEST_CASE("KChar::is_ascii and related checks") {
     CHECK(d.is_alnum());
 
     KChar s(' ');
-    CHECK(s.is_space());
+    CHECK(s.is_whitespace());
 
     KChar lf('\n');
-    CHECK(lf.is_space());
+    CHECK(lf.is_whitespace());
 
     KChar euro(0x20AC); // €
     CHECK(!euro.is_ascii());
@@ -47,10 +46,10 @@ TEST_CASE("KChar::is_ascii and related checks") {
 
 TEST_CASE("KChar::to_ascii_char") {
     KChar a('A');
-    CHECK(a.to_ascii_char() == 'A');
+    CHECK(a.to_char() == 'A');
 
     KChar non_ascii(0x20AC);
-    CHECK_THROWS_AS(non_ascii.to_ascii_char(), std::runtime_error);
+    CHECK_THROWS_AS(non_ascii.to_char(), std::runtime_error);
 }
 
 TEST_CASE("KChar::to_upper / to_lower") {

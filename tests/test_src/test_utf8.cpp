@@ -191,8 +191,8 @@ TEST_CASE("decode_one: valid UTF-8 single characters") {
 TEST_CASE("is_ascii") {
     ByteVec ascii = {'h', 'e', 'l', 'l', 'o'};
     ByteVec non_ascii = {0xE4, 0xBD, 0xA0};
-    CHECK(is_ascii(ascii));
-    CHECK_FALSE(is_ascii(non_ascii));
+    CHECK(is_all_ascii(ascii));
+    CHECK_FALSE(is_all_ascii(non_ascii));
 }
 
 TEST_CASE("debug_codepoint") {
