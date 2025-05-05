@@ -556,17 +556,16 @@ class KStr {
 
         while (pos < data_.size()) {
             if (data_[pos] == '\r') {
-                // \r\n 处理
-                if (pos + 1 < data_.size() && data_[pos + 1] == '\n') {
+                if (pos + 1 < data_.size() && data_[pos + 1] == '\n') { // \r\n
                     result.emplace_back(ByteSpan(&data_[start], pos - start));
                     pos += 2;
                     start = pos;
-                } else { // 只处理 \r
+                } else { // \r
                     result.emplace_back(ByteSpan(&data_[start], pos - start));
                     ++pos;
                     start = pos;
                 }
-            } else if (data_[pos] == '\n') { // 只处理 \n
+            } else if (data_[pos] == '\n') { // \n
                 result.emplace_back(ByteSpan(&data_[start], pos - start));
                 ++pos;
                 start = pos;
