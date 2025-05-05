@@ -109,4 +109,4 @@ class span {
         return span<element_type>(data_ + offset, count);
     }
 };
-}; // namespace tools
+}; // namespace internal

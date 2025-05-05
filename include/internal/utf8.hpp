@@ -6,11 +6,13 @@
 #include <vector>
 #include <cstdint>
 #include <iostream>
+#include "span.hpp"
 
 namespace internal {
 namespace utf8 {
 using Byte = uint8_t;
-using ByteVec = std::vector<Byte>;
+using ByteSpan = span<const Byte>;  // read only
+using ByteVec = std::vector<Byte>;  // allow to modify
 using CodePoint = uint32_t;
 
 struct UTF8Encoded {
@@ -75,7 +77,7 @@ std::size_t lead_utf8_length(Byte lead) {
 }
 
 // 判断某个位置的 len 个字节是否是合法的 UTF-8 编码
-bool is_valid_range(const ByteVec& data, std::size_t pos, std::size_t len) {
+bool is_valid_range(const ByteSpan& data, std::size_t pos, std::size_t len) {
     if (pos + len > data.size()) return false;
 
     uint32_t cp = 0;
@@ -104,7 +106,7 @@ bool is_valid_range(const ByteVec& data, std::size_t pos, std::size_t len) {
 } // namespace
 
 // 获取第一个非法位置（返回 data.size() 表示合法）
-inline std::size_t first_invalid(const ByteVec& data) {
+inline std::size_t first_invalid(const ByteSpan& data) {
     std::size_t i = 0;
     while (i < data.size()) {
         std::size_t len = lead_utf8_length(data[i]);
@@ -118,11 +120,11 @@ inline std::size_t first_invalid(const ByteVec& data) {
 }
 
 // 是否是合法 UTF-8 编码
-inline bool is_valid(const ByteVec& data) {
+inline bool is_valid(const ByteSpan& data) {
     return first_invalid(data) == data.size();
 }
 
-// 获取 code point 所需 UTF-8 长度（1~4 字节）
+// 获取 code point 所需 UTF-8 长度（1~4 字节）, 非法则返回 0 长度
 inline std::size_t codepoint_utf8_size(CodePoint cp) {
     if (cp <= 0x7F) return 1;
     if (cp <= 0x7FF) return 2;
@@ -157,7 +159,7 @@ inline UTF8Encoded encode(CodePoint cp) {
 }
 
 // 尝试解码 data[pos...] 开头的字符（失败时返回 false）, next_pos 存放解码后应处的 pos
-inline UTF8Decoded decode(const ByteVec& data, std::size_t pos) {
+inline UTF8Decoded decode(const ByteSpan& data, std::size_t pos) {
     if (pos >= data.size()) return false;
 
     Byte lead = data[pos];
@@ -201,7 +203,7 @@ inline UTF8Decoded decode(const ByteVec& data, std::size_t pos) {
     return UTF8Decoded(cp, pos + len);
 }
 
-inline std::vector<UTF8Decoded> decode_all(const ByteVec& data) {
+inline std::vector<UTF8Decoded> decode_all(const ByteSpan& data) {
     std::vector<UTF8Decoded> results;
     std::size_t pos = 0;
 
@@ -221,7 +223,7 @@ inline std::vector<UTF8Decoded> decode_all(const ByteVec& data) {
 }
 
 // decode range [start, end)
-inline std::vector<UTF8Decoded> decode_range(const ByteVec& data, size_t start, size_t end) {
+inline std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t end) {
     std::vector<UTF8Decoded> results;
 
     if (start >= end) return results;
@@ -249,7 +251,7 @@ inline std::vector<UTF8Decoded> decode_range(const ByteVec& data, size_t start, 
 }
 
 // 查找字符数（不是字节数）
-inline std::size_t char_count(const ByteVec& data) {
+inline std::size_t char_count(const ByteSpan& data) {
     std::size_t count = 0;
     for (std::size_t pos = 0; pos < data.size();) {
         UTF8Decoded decode_result = decode(data, pos);
@@ -261,7 +263,7 @@ inline std::size_t char_count(const ByteVec& data) {
 }
 
 // 查找首次出现的 code point（按字符计数）
-inline std::size_t find(const ByteVec& data, CodePoint target_codepoint) {
+inline std::size_t find(const ByteSpan& data, CodePoint target_codepoint) {
     std::size_t index = 0;
     for (std::size_t pos = 0; pos < data.size();) {
         UTF8Decoded decode_result = decode(data, pos);
@@ -371,7 +373,7 @@ inline void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
 }
 
 // 是否是 ASCII 纯文本
-inline bool is_ascii(const ByteVec& data) {
+inline bool is_all_ascii(const ByteSpan& data) {
     for (Byte b : data) {
         if (b >= 0x80) return false;
     }

@@ -3,25 +3,33 @@
 #include <cstring>
 #include <ostream>
 #include <stdexcept>
+#include <unordered_set>
 #include "../internal/utf8.hpp"
 
 namespace KString {
-using internal::utf8::ByteVec;
-using internal::utf8::CodePoint;
-
 class KChar {
-    CodePoint value_; // Unicode CodePoint
+    internal::utf8::CodePoint value_; // Unicode CodePoint
 
   public:
+    const static internal::utf8::CodePoint Ill = 0xFFFD;
+
     // 默认构造（0）
     KChar() : value_(0) {}
 
+    bool is_surrogate() const {
+        return value_ >= 0xD800 && value_ <= 0xDFFF;
+    }
+
+    bool is_noncharacter() const {
+        return (value_ & 0xFFFE) == 0xFFFE && value_ <= 0x10FFFF;
+    }
+
     bool is_valid() const {
-        return value_ <= 0x10FFFF && ! (value_ >= 0xD800 && value_ <= 0xDFFF);
+        return value_ <= 0x10FFFF && ! is_surrogate();
     }
 
     // 从 Unicode code point 构造
-    explicit KChar(CodePoint cp) : value_(cp) {
+    explicit KChar(internal::utf8::CodePoint cp) : value_(cp) {
         if (! is_valid()) throw std::invalid_argument("Invalid Unicode code point");
     }
 
@@ -30,7 +38,7 @@ class KChar {
         if (! bytes) throw std::invalid_argument("Null pointer passed to KChar");
 
         // 拷贝最多前 4 个字节（UTF-8 单字符最大长度）
-        ByteVec tmp;
+        internal::utf8::ByteVec tmp;
         for (int i = 0; i < 4 && bytes[i]; ++i) tmp.push_back(static_cast<uint8_t>(bytes[i]));
 
         internal::utf8::UTF8Decoded decode_result = internal::utf8::decode(tmp, 0);
@@ -46,7 +54,7 @@ class KChar {
         *this = KChar(decode_result.cp);
     }
 
-    CodePoint value() const {
+    internal::utf8::CodePoint value() const {
         return value_;
     }
 
@@ -84,9 +92,39 @@ class KChar {
         return is_alpha() || is_digit();
     }
 
-    bool is_space() const {
-        // ASCII 常见空白符: space, \t, \n, \r, \v, \f
-        return value_ == ' ' || value_ == '\t' || value_ == '\n' || value_ == '\r' || value_ == '\v' || value_ == '\f';
+    // bool is_space() const {
+    //     // ASCII 常见空白符: space, \t, \n, \r, \v, \f
+    //     return value_ == ' ' || value_ == '\t' || value_ == '\n' || value_ == '\r' || value_ == '\v' || value_ == '\f';
+    // }
+
+    bool is_whitespace() const {
+        static const std::unordered_set<uint32_t> unicode_spaces = {// ASCII 空白
+                                                                    0x0020,
+                                                                    0x0009,
+                                                                    0x000A,
+                                                                    0x000B,
+                                                                    0x000C,
+                                                                    0x000D,
+                                                                    // unicode 空白
+                                                                    0x00A0,
+                                                                    0x1680,
+                                                                    0x2000,
+                                                                    0x2001,
+                                                                    0x2002,
+                                                                    0x2003,
+                                                                    0x2004,
+                                                                    0x2005,
+                                                                    0x2006,
+                                                                    0x2007,
+                                                                    0x2008,
+                                                                    0x2009,
+                                                                    0x200A,
+                                                                    0x2028,
+                                                                    0x2029,
+                                                                    0x202F,
+                                                                    0x205F,
+                                                                    0x3000};
+        return unicode_spaces.count(value_) > 0;
     }
 
     bool is_printable() const {
@@ -103,7 +141,7 @@ class KChar {
         return *this;
     }
 
-    char to_ascii_char() const {
+    char to_char() const {
         if (! is_ascii()) throw std::runtime_error("KChar is not ASCII; cannot convert to char");
 
         return static_cast<char>(value_);
@@ -114,6 +152,11 @@ class KChar {
 
         internal::utf8::UTF8Encoded enc = internal::utf8::encode(value_);
         return std::string(enc.begin(), enc.end());
+    }
+
+    internal::utf8::ByteVec to_bytes() {
+        internal::utf8::UTF8Encoded enc = internal::utf8::encode(value_);
+        return internal::utf8::ByteVec(enc.bytes, enc.bytes + enc.len);
     }
 
     std::size_t utf8_size() const {
