@@ -65,6 +65,120 @@ TEST_CASE("encode and decode") {
     CHECK(enc4.bytes[0] == (0xF0 | (0x1F600 >> 18)));
 }
 
+TEST_CASE("decode_prev") {
+    const std::vector<uint8_t> valid = {
+        'a', // 0
+        0xe4,
+        0xbd,
+        0xa0, // 1~3 '你'
+        0xe5,
+        0xa5,
+        0xbd, // 4~6 '好'
+        0xf0,
+        0x9f,
+        0x98,
+        0x80, // 7~10 😀
+        'b'   // 11
+    };
+
+    SUBCASE("basic backward decoding") {
+        auto span = ByteSpan(valid.data(), valid.size());
+
+        auto dec1 = decode_prev(span, 1);
+        REQUIRE(dec1.ok);
+        CHECK(dec1.cp == 'a');
+        CHECK(dec1.next_pos == 0);
+
+        auto dec2 = decode_prev(span, 4);
+        REQUIRE(dec2.ok);
+        CHECK(dec2.cp == 0x4F60); // '你'
+        CHECK(dec2.next_pos == 1);
+
+        auto dec3 = decode_prev(span, 7);
+        REQUIRE(dec3.ok);
+        CHECK(dec3.cp == 0x597D); // '好'
+        CHECK(dec3.next_pos == 4);
+
+        auto dec4 = decode_prev(span, 11);
+        REQUIRE(dec4.ok);
+        CHECK(dec4.cp == 0x1F600); // 😀
+        CHECK(dec4.next_pos == 7);
+
+        auto dec5 = decode_prev(span, 12);
+        REQUIRE(dec5.ok);
+        CHECK(dec5.cp == 'b');
+        CHECK(dec5.next_pos == 11);
+    }
+
+    SUBCASE("invalid: pos == 0") {
+        std::vector<uint8_t> data = {'x'};
+        auto dec = decode_prev(ByteSpan(data.data(), data.size()), 0);
+        CHECK(! dec.ok);
+    }
+
+    SUBCASE("invalid continuation byte only") {
+        std::vector<uint8_t> raw = {0xa0}; // continuation without leading
+        auto dec = decode_prev(ByteSpan(raw.data(), raw.size()), 1);
+        CHECK(! dec.ok);
+    }
+
+    SUBCASE("truncated multibyte char") {
+        std::vector<uint8_t> raw = {0xe4, 0xbd}; // incomplete 3-byte char
+        auto dec = decode_prev(ByteSpan(raw.data(), raw.size()), 2);
+        CHECK(! dec.ok);
+    }
+
+    SUBCASE("multiple continuation bytes without lead") {
+        std::vector<uint8_t> raw = {0x80, 0x80, 0x80};
+        auto dec = decode_prev(ByteSpan(raw.data(), raw.size()), 3);
+        CHECK(! dec.ok);
+    }
+
+    SUBCASE("recovery from malformed followed by good char") {
+        std::vector<uint8_t> raw = {0x80, 0xe4, 0xbd, 0xa0};
+        auto dec = decode_prev(ByteSpan(raw.data(), raw.size()), 4);
+        REQUIRE(dec.ok);
+        CHECK(dec.cp == 0x4F60); // '你'
+        CHECK(dec.next_pos == 1);
+    }
+
+    SUBCASE("ASCII only") {
+        std::string ascii = "abc";
+        auto span = ByteSpan(reinterpret_cast<const uint8_t*>(ascii.data()), ascii.size());
+        auto dec = decode_prev(span, 3);
+        REQUIRE(dec.ok);
+        CHECK(dec.cp == 'c');
+        CHECK(dec.next_pos == 2);
+    }
+
+    SUBCASE("2-byte valid + ASCII + 2 invalid bytes") {
+        std::vector<uint8_t> raw = {
+            0xc3,
+            0xa9, // é (U+00E9), valid 2-byte UTF-8
+            'x',  // ASCII
+            0xff,
+            0xff // invalid continuation-like garbage
+        };
+        auto span = ByteSpan(raw.data(), raw.size());
+
+        auto dec1 = decode_prev(span, 5);
+        REQUIRE(! dec1.ok);
+        auto dec2 = decode_prev(span, dec1.next_pos);
+        REQUIRE(! dec2.ok);
+
+        auto dec3 = decode_prev(span, dec2.next_pos);
+        REQUIRE(dec3.ok);
+        CHECK(dec3.cp == 'x');
+        CHECK(dec3.next_pos == 2);
+
+        // decode_prev at pos=2 -> é
+        auto dec4 = decode_prev(span, dec3.next_pos);
+        REQUIRE(dec4.ok);
+        CHECK(dec4.cp == 0x00E9);
+        CHECK(dec4.next_pos == 0);
+    }
+}
+
 TEST_CASE("decode detail") {
     ByteVec data = {static_cast<Byte>(0xC3), static_cast<Byte>(0xA9)}; // é
     UTF8Decoded decode_result = decode(data, 0);
@@ -230,7 +344,7 @@ TEST_CASE("decode_all - continuation byte alone") {
 TEST_CASE("decode_all - overlong encoding") {
     ByteVec data = {static_cast<Byte>(0xC0), static_cast<Byte>(0xAF)}; // overlong '/'
     auto result = decode_all(data);
-    REQUIRE(result.size() == 2);    // 两个非法字节
+    REQUIRE(result.size() == 2); // 两个非法字节
     CHECK_FALSE(result[0].ok);
     CHECK_FALSE(result[1].ok);
 }
@@ -260,8 +374,12 @@ TEST_CASE("decode_range - normal range") {
 }
 
 TEST_CASE("decode_range - truncated at utf8 boundary") {
-    ByteVec data = {'a', static_cast<Byte>(0xF0), static_cast<Byte>(0x9F), static_cast<Byte>(0x98), static_cast<Byte>(0x81)}; // a😁
-    auto result = decode_range(data, 0, 4); // only a + first 3 bytes of 😁
+    ByteVec data = {'a',
+                    static_cast<Byte>(0xF0),
+                    static_cast<Byte>(0x9F),
+                    static_cast<Byte>(0x98),
+                    static_cast<Byte>(0x81)}; // a😁
+    auto result = decode_range(data, 0, 4);   // only a + first 3 bytes of 😁
     REQUIRE(result.size() == 2);
     CHECK(result[0].ok);
     CHECK_FALSE(result[1].ok); // 😁 被截断了
@@ -287,10 +405,6 @@ TEST_CASE("decode_range - start beyond data") {
     CHECK(result.empty());
 }
 
-TEST_CASE("UTF8Decoded construct with true") {
-    CHECK_THROWS_AS(UTF8Decoded fail_construct(true), std::runtime_error);
-}
-
 TEST_CASE("print UTF8Encoded & UTF8Decoded") {
     UTF8Encoded printable = encode(0x4F60);
     std::ostringstream oss;
@@ -298,7 +412,7 @@ TEST_CASE("print UTF8Encoded & UTF8Decoded") {
     CHECK(oss.str() == "UTF8Encoded{len=3, bytes=[0xE4 0xBD 0xA0]}");
 
     UTF8Decoded ok(0x4F60, 3); // '你'
-    UTF8Decoded err(false);
+    UTF8Decoded err(0, false, 0);
     std::ostringstream oss1, oss2;
     oss1 << ok;
     oss2 << err;
