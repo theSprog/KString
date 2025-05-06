@@ -6,9 +6,10 @@ namespace KString {
 using internal::utf8::Byte;
 
 class SSOBytes {
+  public:
     static constexpr std::size_t HeapViewSize = sizeof(std::vector<Byte>) + sizeof(uint8_t);
     static constexpr std::size_t SSO_CAPACITY = HeapViewSize - 1; // 末尾留 1 字节存长度
-
+  private:
     enum : uint8_t {
         kHeapFlag = 0x80
     };
@@ -24,11 +25,6 @@ class SSOBytes {
             uint8_t tag;
         } heap;
     };
-
-    bool is_sso() const {
-        const uint8_t tag_value = heap.tag; // 强制访问为 heap 联合成员
-        return (tag_value & kHeapFlag) == 0;
-    }
 
     void promote_to_heap() {
         if (! is_sso()) return;
@@ -46,15 +42,59 @@ class SSOBytes {
 
 
   public:
+    bool is_sso() const {
+        const uint8_t tag_value = heap.tag; // 强制访问为 heap 联合成员
+        return (tag_value & kHeapFlag) == 0;
+    }
+
     ~SSOBytes() {
         if (! is_sso()) {
             heap.vec.~vector();
         }
     }
 
+    // 默认构造
     SSOBytes() {
         sso.len = 0;
         heap.tag = 0;
+    }
+
+    explicit SSOBytes(Byte ch) : SSOBytes(ch, 1) {}
+
+    explicit SSOBytes(const char* pattern) : SSOBytes(pattern, 1) {}
+
+    explicit SSOBytes(const std::string& pattern) : SSOBytes(pattern.c_str(), 1) {}
+
+    // 构造 n 个相同字节
+    explicit SSOBytes(Byte ch, std::size_t repeat) {
+        if (repeat <= SSO_CAPACITY) {
+            sso.len = static_cast<uint8_t>(repeat);
+            std::fill(sso.data, sso.data + repeat, ch);
+        } else {
+            new (&heap.vec) std::vector<Byte>(repeat, ch);
+            heap.tag = kHeapFlag;
+        }
+    }
+
+    // 构造 n 次 pattern 重复（pattern 为 C 字符串）
+    explicit SSOBytes(const char* pattern, std::size_t repeat) {
+        if (! pattern || *pattern == '\0' || repeat == 0) {
+            sso.len = 0;
+            return;
+        }
+
+        std::size_t pat_len = std::strlen(pattern);
+        std::size_t total = pat_len * repeat;
+
+        if (total <= SSO_CAPACITY) {
+            for (std::size_t i = 0; i < repeat; ++i) std::memcpy(sso.data + i * pat_len, pattern, pat_len);
+            sso.len = static_cast<uint8_t>(total);
+        } else {
+            new (&heap.vec) std::vector<Byte>();
+            heap.vec.reserve(total);
+            for (std::size_t i = 0; i < repeat; ++i) heap.vec.insert(heap.vec.end(), pattern, pattern + pat_len);
+            heap.tag = kHeapFlag;
+        }
     }
 
     SSOBytes(const SSOBytes& other) {
@@ -89,6 +129,17 @@ class SSOBytes {
         this->~SSOBytes();
         new (this) SSOBytes(std::move(other));
         return *this;
+    }
+
+    bool operator==(const SSOBytes& other) const {
+        if (size() != other.size()) return false;
+        const Byte* lhs = data();
+        const Byte* rhs = other.data();
+        return std::equal(lhs, lhs + size(), rhs);
+    }
+
+    bool operator!=(const SSOBytes& other) const {
+        return ! (*this == other);
     }
 
     Byte& operator[](std::size_t idx) {
@@ -173,6 +224,8 @@ class SSOBytes {
     }
 
     void append(const Byte* src, std::size_t len) {
+        if (len == 0) return;
+
         if (is_sso() && sso.len + len <= SSO_CAPACITY) {
             std::memcpy(sso.data + sso.len, src, len);
             sso.len += static_cast<uint8_t>(len);
@@ -180,6 +233,18 @@ class SSOBytes {
             promote_to_heap();
             heap.vec.insert(heap.vec.end(), src, src + len);
         }
+    }
+
+    void append(const char* cstr) {
+        append(reinterpret_cast<const Byte*>(cstr), std::strlen(cstr));
+    }
+
+    void append(std::initializer_list<Byte> list) {
+        append(list.begin(), list.size());
+    }
+
+    void append(const std::string& str) {
+        append(reinterpret_cast<const Byte*>(str.data()), str.size());
     }
 
     void insert(std::size_t pos, Byte byte) {
@@ -270,24 +335,13 @@ class SSOBytes {
         assign(list.begin(), list.end());
     }
 
-    bool operator==(const SSOBytes& other) const {
-        if (size() != other.size()) return false;
-        const Byte* lhs = data();
-        const Byte* rhs = other.data();
-        return std::equal(lhs, lhs + size(), rhs);
-    }
-
-    bool operator!=(const SSOBytes& other) const {
-        return ! (*this == other);
-    }
-
     void shrink_to_fit() {
         if (! is_sso()) {
             heap.vec.shrink_to_fit();
         }
     }
 
-    void swap(SSOBytes& other) {
+    void swap(SSOBytes& other) noexcept {
         if (this == &other) return;
 
         if (is_sso() && other.is_sso()) { // 两者都是 SSO
@@ -306,6 +360,10 @@ class SSOBytes {
             *this = std::move(other);
             other = std::move(tmp);
         }
+    }
+
+    friend void swap(SSOBytes& lhs, SSOBytes& rhs) noexcept {
+        lhs.swap(rhs);
     }
 
     using iterator = Byte*;
@@ -335,4 +393,7 @@ class SSOBytes {
         return end();
     }
 };
+
+constexpr std::size_t SSOBytes::HeapViewSize;
+constexpr std::size_t SSOBytes::SSO_CAPACITY;
 } // namespace KString
