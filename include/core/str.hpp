@@ -35,7 +35,7 @@ class KStr {
                 cur_pos += (size == 0) ? 1 : size;
             } else { // 尚未解码则解码获取 next_pos
                 auto dec = internal::utf8::decode(data, cur_pos);
-                cur_pos = dec.ok ? dec.next_pos : cur_pos + 1;
+                cur_pos = dec.next_pos;
             }
 
             decoded = false;
@@ -68,6 +68,68 @@ class KStr {
 
         CharIterator end() const {
             return CharIterator(data, data.size());
+        }
+    };
+
+    struct ReverseCharIterator {
+        ByteSpan data;
+        std::size_t cur_pos; // 当前字符的末尾字节位置（注意：是末尾！）
+        mutable KChar current;
+        mutable bool decoded;
+
+        ReverseCharIterator(ByteSpan data, std::size_t end_pos)
+            : data(data), cur_pos(end_pos), current(), decoded(false) {}
+
+        KChar operator*() const {
+            if (cur_pos == 0) return KChar(); // 到达字符串开头，返回空字符
+            if (! decoded) {
+                // 需要从当前位置向前寻找一个有效的UTF-8字符起始位置
+                auto dec = internal::utf8::decode_prev(data, cur_pos);
+                current = dec.ok ? KChar(dec.cp) : KChar();
+                decoded = true;
+            }
+            return current;
+        }
+
+        ReverseCharIterator& operator++() {
+            if (decoded) { // 已经解码则直接复用
+                std::size_t size = current.utf8_size();
+                cur_pos -= (size == 0) ? 1 : size;
+            } else { // 尚未解码则解码获取 next_pos
+                auto dec = internal::utf8::decode_prev(data, cur_pos);
+                cur_pos = dec.next_pos;
+            }
+
+            decoded = false;
+            return *this;
+        }
+
+        bool operator==(const ReverseCharIterator& other) const {
+            return cur_pos == other.cur_pos && data.data() == other.data.data();
+        }
+
+        bool operator!=(const ReverseCharIterator& other) const {
+            return ! (*this == other);
+        }
+
+        using iterator_category = std::input_iterator_tag;
+        using value_type = KChar;
+        using difference_type = std::ptrdiff_t;
+        using pointer = void;
+        using reference = KChar;
+    };
+
+    struct ReverseCharRange {
+        ByteSpan data;
+
+        explicit ReverseCharRange(ByteSpan d) : data(d) {}
+
+        ReverseCharIterator begin() const {
+            return ReverseCharIterator(data, data.size());
+        }
+
+        ReverseCharIterator end() const {
+            return ReverseCharIterator(data, 0);
         }
     };
 
@@ -113,10 +175,15 @@ class KStr {
     // 面向底层操作场景，如 mmap buffer
     KStr(const uint8_t* ptr, std::size_t len) : data_(ptr, len) {}
 
+    // initializer_list 不拥有所有权
+    // KStr(std::initializer_list<internal::utf8::Byte>) {    }
+
     explicit KStr(ByteSpan bytes) : data_(bytes) {}
 
     friend bool operator==(const KStr& lhs, const KStr& rhs) {
         if (lhs.data_.size() != rhs.data_.size()) return false;
+        // lhs.data_.size() == rhs.data_.size()
+        if (lhs.data_.size() == 0) return true; // 都是空串不用比较
         return std::memcmp(lhs.data_.data(), rhs.data_.data(), lhs.data_.size()) == 0;
     }
 
@@ -126,6 +193,14 @@ class KStr {
 
     friend bool operator==(const char* lhs, const KStr& rhs) {
         return KStr(lhs) == rhs;
+    }
+
+    friend bool operator==(const KStr& lhs, const std::string& rhs) {
+        return lhs == KStr(rhs.c_str());
+    }
+
+    friend bool operator==(const std::string& lhs, const KStr& rhs) {
+        return KStr(lhs.c_str()) == rhs;
     }
 
     friend bool operator!=(const KStr& lhs, const KStr& rhs) {
@@ -177,7 +252,7 @@ class KStr {
         while (pos < data_.size()) {
             internal::utf8::UTF8Decoded dec = internal::utf8::decode(data_, pos);
             ++count;
-            pos = dec.ok ? dec.next_pos : pos + 1; // 无效字节视作一个字符
+            pos = dec.next_pos; // 无效字节视作一个字符
         }
         return count;
     }
@@ -189,6 +264,10 @@ class KStr {
     // 字符迭代器, 返回可迭代字符视图，等价于 as_chars()，每次返回一个 KChar（已解码）
     CharRange iter_chars() const {
         return CharRange(data_);
+    }
+
+    ReverseCharRange iter_chars_rev() const {
+        return ReverseCharRange(data_);
     }
 
     // 获取第 idx 个字符（按字符下标），返回为子串字节
@@ -267,7 +346,7 @@ class KStr {
         while (pos < data_.size()) {
             if (i == idx) return pos;
             auto dec = internal::utf8::decode(data_, pos);
-            pos = dec.ok ? dec.next_pos : pos + 1;
+            pos = dec.next_pos;
             ++i;
         }
         throw std::out_of_range("KStr::char index exceeds character count");
@@ -334,7 +413,7 @@ class KStr {
             }
 
             auto dec = internal::utf8::decode(data_, pos);
-            pos = dec.ok ? dec.next_pos : pos + 1;
+            pos = dec.next_pos;
             ++idx;
 
             if (idx == start + count) {
@@ -372,7 +451,7 @@ class KStr {
             }
 
             auto dec = internal::utf8::decode(data_, pos);
-            pos = dec.ok ? dec.next_pos : pos + 1;
+            pos = dec.next_pos;
             ++idx;
         }
 
@@ -398,7 +477,7 @@ class KStr {
                 result.emplace_back(KChar(dec.cp), offset, char_idx);
                 pos = dec.next_pos;
             } else {
-                result.emplace_back(KChar(data_[pos]), offset, char_idx);
+                result.emplace_back(KChar(KString::KChar::Ill), offset, char_idx);
                 ++pos;
             }
             ++char_idx;
@@ -417,11 +496,10 @@ class KStr {
         auto pair = split_at(mid);
         const ByteSpan right_bytes = pair.second.as_bytes();
 
-        assert(!right_bytes.empty());
-        
-        std::size_t skip = 0;
-        auto dec = internal::utf8::decode(right_bytes, skip);
-        std::size_t skip_len = dec.ok ? dec.next_pos : 1;
+        assert(! right_bytes.empty());
+
+        auto dec = internal::utf8::decode(right_bytes, 0);
+        std::size_t skip_len = dec.next_pos;
 
         return {pair.first, KStr(ByteSpan(right_bytes.data() + skip_len, right_bytes.size() - skip_len))};
     }
@@ -438,15 +516,12 @@ class KStr {
         std::size_t pos = 0;
         std::size_t splits_done = 0;
 
-        while (pos + delim_bytes.size() <= data_.size()) {
+        while (pos + delim_bytes.size() <= data_.size() && splits_done < max_splits) {
             if (std::memcmp(&data_[pos], delim_bytes.data(), delim_bytes.size()) == 0) {
                 result.emplace_back(ByteSpan(&data_[start], pos - start));
                 pos += delim_bytes.size();
                 start = pos;
                 ++splits_done;
-                if (splits_done >= max_splits) {
-                    break;
-                }
             } else {
                 ++pos;
             }
@@ -513,6 +588,7 @@ class KStr {
         std::size_t pos = 0;
         std::size_t token_start = 0;
         bool in_whitespace = true;
+        if (data_.empty()) return result;
 
         while (pos < data_.size()) {
             std::size_t current = pos;
@@ -553,6 +629,7 @@ class KStr {
         std::vector<KStr> result;
         std::size_t start = 0;
         std::size_t pos = 0;
+        if (data_.empty()) return result;
 
         while (pos < data_.size()) {
             if (data_[pos] == '\r') {
@@ -581,195 +658,146 @@ class KStr {
         return result;
     }
 
-    template <typename Predicate>
-    std::vector<KStr> match(Predicate pred) const {
-        std::vector<KStr> result;
-        std::size_t pos = 0;
-        std::size_t start = 0;
+    template <typename Predicate, typename Emit>
+    void match_loop(const CharRange& chars, Predicate pred, Emit emit) const {
         bool in_match = false;
+        std::size_t start_byte = 0;
+        std::size_t start_idx = 0;
+        std::size_t cur_idx = 0;
+        std::size_t byte_pos = 0;
 
-        while (pos < data_.size()) {
-            std::size_t current = pos;
-            auto dec = internal::utf8::decode(data_, pos);
-
-            if (! dec.ok) {
-                ++pos;
-                continue;
-            }
-
-            KChar ch(dec.cp);
-            pos = dec.next_pos;
-
-            if (pred(ch)) {
+        for (const auto& entry : chars) {
+            if (pred(entry)) {
                 if (! in_match) {
-                    start = current;
+                    start_byte = byte_pos;
+                    start_idx = cur_idx;
                     in_match = true;
                 }
             } else {
                 if (in_match) {
-                    result.emplace_back(ByteSpan(&data_[start], current - start));
+                    emit(start_idx, start_byte, byte_pos);
                     in_match = false;
                 }
             }
+
+            ++cur_idx;
+            byte_pos += entry.utf8_size();
         }
 
         if (in_match) {
-            result.emplace_back(ByteSpan(&data_[start], data_.size() - start));
+            emit(start_idx, start_byte, byte_pos);
         }
-
-        return result;
     }
 
     template <typename Predicate>
-    std::vector<KStr> rmatch(Predicate pred) const {
-        std::vector<KStr> result;
-        auto chars = char_indices(); // 获取 (KChar, byte_pos)
-
-        std::size_t i = chars.size();
-        std::size_t end_byte = data_.size();
-        bool in_match = false;
-
-        while (i-- > 0) {
-            auto& entry = chars[i];
-            const KChar& ch = entry.ch;
-            std::size_t byte_pos = entry.byte_offset;
-
-            if (pred(ch)) {
-                if (! in_match) {
-                    end_byte = byte_pos + ch.utf8_size(); // ch.len() 是 UTF-8 长度，可缓存或用 decode
-                    in_match = true;
-                }
-            } else {
-                if (in_match) {
-                    result.emplace_back(
-                        ByteSpan(&data_[byte_pos + ch.utf8_size()], end_byte - (byte_pos + ch.utf8_size())));
-                    in_match = false;
-                }
-            }
-        }
-
-        if (in_match) {
-            result.emplace_back(ByteSpan(&data_[0], end_byte));
-        }
-
-        return result;
+    std::vector<KStr> match(Predicate pred) const {
+        std::vector<KStr> out;
+        match_loop(iter_chars(), pred, [&](std::size_t, std::size_t start, std::size_t end) {
+            out.emplace_back(ByteSpan(&data_[start], end - start));
+        });
+        return out;
     }
 
     template <typename Predicate>
     std::vector<std::pair<std::size_t, KStr>> match_indices(Predicate pred) const {
-        std::vector<std::pair<std::size_t, KStr>> result;
-        std::size_t pos = 0, char_idx = 0;
-        std::size_t start_byte = 0, start_idx = 0;
-        bool in_match = false;
-
-        while (pos < data_.size()) {
-            std::size_t cur = pos;
-            auto dec = internal::utf8::decode(data_, pos);
-            if (! dec.ok) {
-                ++pos;
-                ++char_idx;
-                continue;
-            }
-
-            KChar ch(dec.cp);
-            if (pred(ch)) {
-                if (! in_match) {
-                    start_byte = cur;
-                    start_idx = char_idx;
-                    in_match = true;
-                }
-            } else {
-                if (in_match) {
-                    result.emplace_back(start_idx, KStr(ByteSpan(&data_[start_byte], cur - start_byte)));
-                    in_match = false;
-                }
-            }
-
-            ++char_idx;
-        }
-
-        if (in_match) {
-            result.emplace_back(start_idx, KStr(ByteSpan(&data_[start_byte], data_.size() - start_byte)));
-        }
-
-        return result;
+        std::vector<std::pair<std::size_t, KStr>> out;
+        match_loop(iter_chars(), pred, [&](std::size_t idx, std::size_t start, std::size_t end) {
+            out.emplace_back(idx, KStr(ByteSpan(&data_[start], end - start)));
+        });
+        return out;
     }
 
-    template <typename Predicate>
-    std::vector<std::pair<std::size_t, KStr>> rmatch_indices(Predicate pred) const {
-        std::vector<std::pair<std::size_t, KStr>> result;
-        auto chars = char_indices(); // [(KChar, byte_offset, char_index)]
+    // too complex !!
+    // template <typename Predicate>
+    // std::vector<KStr> rmatch(Predicate pred) const {
+    //     std::vector<KStr> result;
+    //     if (data_.empty()) return result;
 
-        std::size_t i = chars.size();
-        std::size_t end_byte = data_.size();
-        bool in_match = false;
+    //     auto chars = char_indices(); // 获取 (KChar, byte_pos)
 
-        while (i-- > 0) {
-            const KChar& ch = chars[i].ch;
-            std::size_t byte_pos = chars[i].byte_offset;
-            std::size_t char_idx = i;
+    //     std::size_t i = chars.size();
+    //     std::size_t end_byte = data_.size();
+    //     bool in_match = false;
 
-            if (pred(ch)) {
-                if (! in_match) {
-                    end_byte = byte_pos + ch.utf8_size();
-                    in_match = true;
-                }
-            } else {
-                if (in_match) {
-                    result.emplace_back(
-                        char_idx + 1,
-                        KStr(ByteSpan(&data_[byte_pos + ch.utf8_size()], end_byte - (byte_pos + ch.utf8_size()))));
-                    in_match = false;
-                }
-            }
-        }
+    //     while (i-- > 0) {
+    //         auto& entry = chars[i];
+    //         const KChar& ch = entry.ch;
+    //         std::size_t byte_pos = entry.byte_offset;
 
-        if (in_match) {
-            result.emplace_back(0, KStr(ByteSpan(&data_[0], end_byte)));
-        }
+    //         if (pred(ch)) {
+    //             if (! in_match) {
+    //                 end_byte = byte_pos + ch.utf8_size(); // ch.len() 是 UTF-8 长度，可缓存或用 decode
+    //                 in_match = true;
+    //             }
+    //         } else {
+    //             if (in_match) {
+    //                 result.emplace_back(
+    //                     ByteSpan(&data_[byte_pos + ch.utf8_size()], end_byte - (byte_pos + ch.utf8_size())));
+    //                 in_match = false;
+    //             }
+    //         }
+    //     }
 
-        return result;
-    }
+    //     if (in_match) {
+    //         result.emplace_back(ByteSpan(&data_[0], end_byte));
+    //     }
+
+    //     return result;
+    // }
+
+    // template <typename Predicate>
+    // std::vector<std::pair<std::size_t, KStr>> rmatch_indices(Predicate pred) const {
+    //     std::vector<std::pair<std::size_t, KStr>> result;
+    //     auto chars = char_indices(); // [(KChar, byte_offset, char_index)]
+
+    //     std::size_t i = chars.size();
+    //     std::size_t end_byte = data_.size();
+    //     bool in_match = false;
+
+    //     while (i-- > 0) {
+    //         const KChar& ch = chars[i].ch;
+    //         std::size_t byte_pos = chars[i].byte_offset;
+    //         std::size_t char_idx = i;
+
+    //         if (pred(ch)) {
+    //             if (! in_match) {
+    //                 end_byte = byte_pos + ch.utf8_size();
+    //                 in_match = true;
+    //             }
+    //         } else {
+    //             if (in_match) {
+    //                 result.emplace_back(
+    //                     char_idx + 1,
+    //                     KStr(ByteSpan(&data_[byte_pos + ch.utf8_size()], end_byte - (byte_pos + ch.utf8_size()))));
+    //                 in_match = false;
+    //             }
+    //         }
+    //     }
+
+    //     if (in_match) {
+    //         result.emplace_back(0, KStr(ByteSpan(&data_[0], end_byte)));
+    //     }
+
+    //     return result;
+    // }
 
     KStr trim_start() const {
-        std::size_t pos = 0;
-
-        while (pos < data_.size()) {
-            auto dec = internal::utf8::decode(data_, pos);
-            if (! dec.ok) {
-                ++pos;
-                continue;
-            }
-
-            if (! KChar(dec.cp).is_whitespace()) {
-                break;
-            }
-
-            pos = dec.next_pos;
+        std::size_t byte_start = 0;
+        for (const auto& ch : iter_chars()) {
+            if (! ch.is_whitespace()) break;
+            byte_start += ch.utf8_size();
         }
-
-        return KStr(ByteSpan(&data_[pos], data_.size() - pos));
+        return KStr(ByteSpan(&data_[byte_start], data_.size() - byte_start));
     }
 
     KStr trim_end() const {
-        std::size_t pos = 0;
-        std::size_t last_non_space = data_.size(); // 初始认为全是空白
-
-        while (pos < data_.size()) {
-            auto dec = internal::utf8::decode(data_, pos);
-            if (! dec.ok) {
-                ++pos;
-                continue;
-            }
-
-            if (! KChar(dec.cp).is_whitespace()) {
-                last_non_space = pos;
-            }
-
-            pos = dec.next_pos;
+        std::size_t byte_end = data_.size();
+        for (auto it = iter_chars_rev().begin(); it != iter_chars_rev().end(); ++it) {
+            const auto& ch = *it;
+            if (! ch.is_whitespace()) break;
+            byte_end -= ch.utf8_size();
         }
-
-        return KStr(ByteSpan(&data_[0], last_non_space));
+        return KStr(ByteSpan(&data_[0], byte_end));
     }
 
     KStr trim() const {
@@ -778,38 +806,22 @@ class KStr {
 
     template <typename Predicate>
     KStr trim_start_matches(Predicate pred) const {
-        std::size_t pos = 0;
-        while (pos < data_.size()) {
-            auto dec = internal::utf8::decode(data_, pos);
-            if (! dec.ok) {
-                ++pos;
-                continue;
-            }
-            if (! pred(KChar(dec.cp))) break;
-            pos = dec.next_pos;
+        std::size_t byte_start = 0;
+        for (const auto& ch : iter_chars()) {
+            if (! pred(ch)) break;
+            byte_start += ch.utf8_size();
         }
-        return KStr(ByteSpan(&data_[pos], data_.size() - pos));
+        return KStr(ByteSpan(&data_[byte_start], data_.size() - byte_start));
     }
 
     template <typename Predicate>
     KStr trim_end_matches(Predicate pred) const {
-        std::size_t pos = 0;
-        std::size_t last_non_match = data_.size();
-
-        while (pos < data_.size()) {
-            auto cur = pos;
-            auto dec = internal::utf8::decode(data_, pos);
-            if (! dec.ok) {
-                ++pos;
-                continue;
-            }
-            if (! pred(KChar(dec.cp))) {
-                last_non_match = pos;
-            }
-            pos = dec.next_pos;
+        std::size_t byte_end = data_.size();
+        for (const auto& ch : iter_chars_rev()) {
+            if (! pred(ch)) break;
+            byte_end -= ch.utf8_size();
         }
-
-        return KStr(ByteSpan(&data_[0], last_non_match));
+        return KStr(ByteSpan(&data_[0], byte_end));
     }
 
     template <typename Predicate>
