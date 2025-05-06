@@ -3,6 +3,19 @@
 #include "../internal/utf8.hpp"
 #include "./char.hpp"
 
+#if __cplusplus >= 201703L
+#include <functional> // for std::boyer_moore_searcher
+#define HAS_STD_BOYER_MOORE 1
+#else
+#define HAS_STD_BOYER_MOORE 0
+#endif
+
+#if defined(__GLIBC__) && ! defined(__APPLE__)
+#define HAS_MEMMEM 1
+#else
+#define HAS_MEMMEM 0
+#endif
+
 namespace KString {
 using internal::utf8::ByteSpan;
 using internal::utf8::CodePoint;
@@ -231,7 +244,7 @@ class KStr {
     }
 
 #if __cplusplus >= 201703L
-    std::string_view to_string_view() const {
+    std::string_view as_string_view() const {
         return std::string_view(reinterpret_cast<const char*>(data_.data()), data_.size());
     }
 #endif
@@ -352,41 +365,62 @@ class KStr {
         throw std::out_of_range("KStr::char index exceeds character count");
     }
 
-    // 查找字符位置（按字符下标），找不到返回 npos
-    std::size_t find(KStr substr) const {
-        auto hay = as_bytes();
-        auto pat = substr.as_bytes();
-
+    std::size_t find_bytes(ByteSpan hay, ByteSpan pat) const {
         if (pat.empty()) return 0;
         if (pat.size() > hay.size()) return knpos;
-        for (std::size_t i = 0; i <= hay.size() - pat.size(); ++i) {
-            if (std::memcmp(hay.data() + i, pat.data(), pat.size()) == 0) {
-                // 回推前面有多少个 codepoint 以获取字符下标
-                return count_chars_before(i);
-            }
+
+        // search successfully
+        {
+#if HAS_STD_BOYER_MOORE
+            std::boyer_moore_searcher bm(pat.begin(), pat.end());
+            auto it = bm(hay.begin(), hay.end());
+            if (it.first != hay.end()) return std::distance(hay.begin(), it.first);
+#elif HAS_MEMMEM
+            const void* res = memmem(hay.data(), hay.size(), pat.data(), pat.size());
+            if (res) return static_cast<const internal::utf8::Byte*>(res) - hay.data();
+#else
+            // fall back to std::search(), too slow !!!
+            auto it = std::search(hay.begin(), hay.end(), pat.begin(), pat.end());
+            if (it != hay.end()) return std::distance(hay.begin(), it);
+#endif
         }
+
+        // not found
         return knpos;
     }
 
-    std::size_t rfind(KStr substr) const {
-        auto hay = as_bytes();
-        auto pat = substr.as_bytes();
-
-        if (pat.empty()) return char_size(); // 返回字符数作为尾部
-
+    // 朴素逆序匹配, BM 算法难以处理逆序
+    std::size_t rfind_bytes(ByteSpan hay, ByteSpan pat) const {
+        if (pat.empty()) return hay.size(); // 表示末尾插入位置
         if (pat.size() > hay.size()) return knpos;
 
         for (std::size_t i = hay.size() - pat.size() + 1; i-- > 0;) {
-            if (std::memcmp(hay.data() + i, pat.data(), pat.size()) == 0) {
-                // 回推前面有多少个 codepoint 以获取字符下标
-                return count_chars_before(i);
-            }
+            if (std::memcmp(hay.data() + i, pat.data(), pat.size()) == 0) return i;
         }
         return knpos;
     }
 
+    // 查找字符位置（按字符下标），找不到返回 npos
+    std::size_t find(KStr substr) const {
+        auto offset = find_bytes(this->as_bytes(), substr.as_bytes());
+        return (offset != knpos) ? count_chars_before(offset) : knpos;
+    }
+
+    std::size_t find_in_byte(KStr substr) const {
+        return find_bytes(this->as_bytes(), substr.as_bytes());
+    }
+
+    std::size_t rfind(KStr substr) const {
+        auto offset = rfind_bytes(this->as_bytes(), substr.as_bytes());
+        return (offset != knpos) ? count_chars_before(offset) : knpos;
+    }
+
+    std::size_t rfind_in_byte(KStr substr) const {
+        return rfind_bytes(this->as_bytes(), substr.as_bytes());
+    }
+
     bool contains(KStr substr) const {
-        return find(substr) != knpos;
+        return find_in_byte(substr) != knpos;
     }
 
     bool starts_with(KStr prefix) const {
