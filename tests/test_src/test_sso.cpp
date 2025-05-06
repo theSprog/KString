@@ -36,7 +36,7 @@ TEST_CASE("Copy constructor from heap") {
 
 TEST_CASE("Copy assignment from SSO and heap") {
     SSOBytes a;
-    for (char c : {'h', 'e', 'y'}) a.push_back(c);
+    for (char c : {'h', 'e', 'y'}) a.push_back(Byte(c));
 
     SSOBytes b;
     b = a;
@@ -89,14 +89,12 @@ TEST_CASE("Move assignment from SSO and heap") {
 
 TEST_CASE("Self-assignment should not crash or corrupt") {
     SSOBytes a;
-    for (char c : {'x', 'y', 'z'}) a.push_back(c);
-    a = a;
+    for (char c : {'x', 'y', 'z'}) a.push_back(Byte(c));
     CHECK(a.size() == 3);
     CHECK(a[2] == 'z');
 
     SSOBytes b;
     for (int i = 0; i < 80; ++i) b.push_back('x');
-    b = b;
     CHECK(b.size() == 80);
     CHECK(b[0] == 'x');
 }
@@ -519,7 +517,7 @@ TEST_CASE("iterator correctness") {
     SSOBytes s;
     std::string ref;
     for (char c = 'a'; c <= 'z'; ++c) {
-        s.push_back(c);
+        s.push_back(Byte(c));
         ref += c;
     }
 

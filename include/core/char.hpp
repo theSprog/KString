@@ -11,7 +11,7 @@ class KChar {
     internal::utf8::CodePoint value_; // Unicode CodePoint
 
   public:
-    static constexpr internal::utf8::CodePoint Ill = 0xFFFD;
+    enum : internal::utf8::CodePoint { Ill = 0xFFFD };
 
     // 默认构造（0）
     KChar() : value_(0) {}
@@ -175,8 +175,6 @@ class KChar {
         return os;
     }
 };
-
-constexpr internal::utf8::CodePoint KChar::Ill;
 } // namespace KString
 
 

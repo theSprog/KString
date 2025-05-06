@@ -7,8 +7,11 @@ using internal::utf8::Byte;
 
 class SSOBytes {
   public:
-    static constexpr std::size_t HeapViewSize = sizeof(std::vector<Byte>) + sizeof(uint8_t);
-    static constexpr std::size_t SSO_CAPACITY = HeapViewSize - 1; // 末尾留 1 字节存长度
+    enum : std::size_t {
+        HeapViewSize = sizeof(std::vector<Byte>) + sizeof(uint8_t),
+        SSO_CAPACITY = HeapViewSize - 1
+    };
+
   private:
     enum : uint8_t {
         kHeapFlag = 0x80
@@ -257,7 +260,7 @@ class SSOBytes {
             ++sso.len;
         } else {
             promote_to_heap();
-            heap.vec.insert(heap.vec.begin() + pos, byte);
+            heap.vec.insert(std::next(heap.vec.begin(), static_cast<std::ptrdiff_t>(pos)), byte);
         }
     }
 
@@ -313,7 +316,7 @@ class SSOBytes {
             for (std::size_t i = pos; i + 1 < sso.len; ++i) sso.data[i] = sso.data[i + 1];
             --sso.len;
         } else {
-            heap.vec.erase(heap.vec.begin() + pos);
+            heap.vec.erase(std::next(heap.vec.begin(), static_cast<std::ptrdiff_t>(pos)));
         }
     }
 
@@ -393,7 +396,4 @@ class SSOBytes {
         return end();
     }
 };
-
-constexpr std::size_t SSOBytes::HeapViewSize;
-constexpr std::size_t SSOBytes::SSO_CAPACITY;
 } // namespace KString

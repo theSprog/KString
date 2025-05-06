@@ -175,7 +175,9 @@ class KStr {
 
 
   public:
-    static constexpr size_t knpos = static_cast<size_t>(-1);
+    enum : std::size_t {
+        knpos = static_cast<std::size_t>(-1)
+    };
 
     KStr() : data_() {}
 
@@ -221,7 +223,9 @@ class KStr {
     }
 
     friend std::ostream& operator<<(std::ostream& os, const KStr& s) {
-        return os.write(reinterpret_cast<const char*>(s.as_bytes().data()), s.as_bytes().size());
+        // size_t 超过 streamsize 可表示范围 ?
+        return os.write(reinterpret_cast<const char*>(s.as_bytes().data()),
+                        static_cast<std::streamsize>(s.as_bytes().size()));
     }
 
     friend bool operator<(const KStr& a, const KStr& b) {
@@ -376,8 +380,11 @@ class KStr {
             auto it = bm(hay.begin(), hay.end());
             if (it.first != hay.end()) return std::distance(hay.begin(), it.first);
 #elif HAS_MEMMEM
-            const void* res = memmem(hay.data(), hay.size(), pat.data(), pat.size());
-            if (res) return static_cast<const internal::utf8::Byte*>(res) - hay.data();
+            const void* where = memmem(hay.data(), hay.size(), pat.data(), pat.size());
+            if (where) {
+                auto offset = static_cast<const internal::utf8::Byte*>(where) - hay.data();
+                return static_cast<std::size_t>(offset);
+            }
 #else
             // fall back to std::search(), too slow !!!
             auto it = std::search(hay.begin(), hay.end(), pat.begin(), pat.end());
@@ -884,6 +891,4 @@ class KStr {
   private:
     ByteSpan data_;
 };
-
-constexpr std::size_t KStr::knpos;
 } // namespace KString
