@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 #include "../../include/kstr.hpp"
+#include "base.hpp"
 
 using kstring::KChar;
 using kstring::KStr;
@@ -44,6 +45,19 @@ TEST_CASE("KStr constructors and basic accessors") {
         CHECK(s.byte_size() == 3);
         CHECK(s.char_size() == 3);
     }
+}
+
+TEST_CASE("KStr operater") {
+    KStr s("你好abc");
+    CHECK("你好abc" == s);
+    CHECK(s == "你好abc");
+    CHECK(std::string("你好abc") == s);
+    CHECK(s == std::string("你好abc"));
+
+    CHECK(KStr("abcd") < KStr("abcde"));
+    CHECK(KStr("abcd") <= KStr("abcde"));
+    CHECK(KStr("abce") > KStr("abcd"));
+    CHECK(KStr("abce") >= KStr("abcd"));
 }
 
 TEST_CASE("KStr iter_chars() yields correct KChar sequence") {
@@ -141,7 +155,7 @@ TEST_CASE("KStr char_at, byte_at, operator[]") {
     SUBCASE("operator[] throws if decoding fails") {
         std::vector<uint8_t> raw = {0xe4, 0xff};
         KStr s2(raw);
-        CHECK_THROWS_AS(s2[0], std::runtime_error);
+        CHECK(s2[0] == ByteSpan({0xe4}));
     }
 
     SUBCASE("char_at decoding fails") {
@@ -538,12 +552,12 @@ TEST_CASE("KStr lines with only newlines") {
 }
 
 TEST_CASE("KStr match/match_indices basic and edge cases") {
-    KStr s("a123bb4567cc89");
+    KStr s_g("a123bb4567cc89");
 
     auto is_digit = [](KChar ch) { return ch.is_digit(); };
 
     SUBCASE("match - continuous digit runs") {
-        auto parts = s.match(is_digit);
+        auto parts = s_g.match(is_digit);
         REQUIRE(parts.size() == 3);
         CHECK(parts[0] == "123");
         CHECK(parts[1] == "4567");
@@ -551,7 +565,7 @@ TEST_CASE("KStr match/match_indices basic and edge cases") {
     }
 
     SUBCASE("match_indices - reports correct indices and substrings") {
-        auto result = s.match_indices(is_digit);
+        auto result = s_g.match_indices(is_digit);
         REQUIRE(result.size() == 3);
         CHECK(result[0].first == 1);
         CHECK(result[0].second == "123");

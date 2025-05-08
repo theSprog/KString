@@ -12,6 +12,14 @@ TEST_CASE("Default constructor should initialize empty SSO") {
     CHECK(s.is_sso() == true);
 }
 
+TEST_CASE("SSO operator") {
+    SSOBytes a("hello");
+    SSOBytes b("world");
+    SSOBytes c("hello");
+    CHECK(a != b);
+    CHECK(a == c);
+}
+
 TEST_CASE("Copy constructor from SSO") {
     SSOBytes a;
     a.push_back('x');
@@ -21,6 +29,9 @@ TEST_CASE("Copy constructor from SSO") {
     CHECK(b[0] == 'x');
     CHECK(b[1] == 'y');
     CHECK(b.is_sso() == true);
+
+    const SSOBytes c(a);
+    CHECK(c[0] == 'x');
 }
 
 TEST_CASE("Copy constructor from heap") {
@@ -144,6 +155,11 @@ TEST_CASE("front() and back() behavior") {
     CHECK(s.back() == 'o');
     s.back() = 'z';
     CHECK(s.back() == 'z');
+
+    const SSOBytes s2("mno");
+    CHECK(s2.front() == 'm');
+    CHECK(s2.back() == 'o');
+    CHECK(s2.back() != 'z');
 }
 
 TEST_CASE("clear() should reset state") {
@@ -485,6 +501,10 @@ TEST_CASE("swap: SSO <-> SSO") {
     a.swap(b);
     CHECK(std::string(a.begin(), a.end()) == "xyz");
     CHECK(std::string(b.begin(), b.end()) == "abc");
+
+    swap(a, b);
+    CHECK(std::string(a.begin(), a.end()) == "abc");
+    CHECK(std::string(b.begin(), b.end()) == "xyz");
 }
 
 TEST_CASE("swap: heap <-> heap") {
@@ -523,6 +543,12 @@ TEST_CASE("iterator correctness") {
 
     std::string iter;
     for (auto b : s) {
+        iter += static_cast<char>(b);
+    }
+    CHECK(iter == ref);
+
+    iter.clear();
+    for (const auto b : s) {
         iter += static_cast<char>(b);
     }
     CHECK(iter == ref);

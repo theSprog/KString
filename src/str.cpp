@@ -1,5 +1,6 @@
 #include "base.hpp"
 #include "kstr.hpp"
+#include "utf8.hpp"
 
 #if __cplusplus >= 201703L
 #include <functional> // for std::boyer_moore_searcher
@@ -101,13 +102,7 @@ ByteSpan KStr::as_bytes() const {
 
 // 返回字符数（非字节数）
 std::size_t KStr::char_size() const {
-    std::size_t count = 0, pos = 0;
-    while (pos < data_.size()) {
-        utf8::UTF8Decoded dec = utf8::decode(data_, pos);
-        ++count;
-        pos = dec.next_pos; // 无效字节视作一个字符
-    }
-    return count;
+    return utf8::char_count(data_);
 }
 
 std::size_t KStr::byte_size() const {
@@ -127,10 +122,7 @@ ReverseCharRange KStr::iter_chars_rev() const {
 ByteSpan KStr::operator[](std::size_t idx) const {
     std::size_t pos = 0, i = 0;
     while (pos < data_.size()) {
-        utf8::UTF8Decoded dec = utf8::decode(data_, pos);
-        if (! dec.ok) {
-            throw std::runtime_error("KStr::operator[] decode failed at byte offset " + std::to_string(pos));
-        }
+        utf8::UTF8Decoded dec = utf8::decode_one(data_, pos);
         if (i == idx) {
             return ByteSpan(&data_[pos], dec.next_pos - pos);
         }
@@ -144,7 +136,7 @@ ByteSpan KStr::operator[](std::size_t idx) const {
 KChar KStr::char_at(std::size_t idx) const {
     std::size_t pos = 0, i = 0;
     while (pos < data_.size()) {
-        auto dec = utf8::decode(data_, pos);
+        auto dec = utf8::decode_one(data_, pos);
         if (! dec.ok) {
             if (i == idx) {
                 return KChar(kstring::Ill_CODEPOINT); // 视作独立非法字节
@@ -198,14 +190,15 @@ std::size_t KStr::char_index_to_byte_offset(std::size_t idx) const {
     std::size_t pos = 0, i = 0;
     while (pos < data_.size()) {
         if (i == idx) return pos;
-        auto dec = utf8::decode(data_, pos);
+        auto dec = utf8::decode_one(data_, pos);
         pos = dec.next_pos;
         ++i;
     }
     throw std::out_of_range("KStr::char index exceeds character count");
 }
 
-std::size_t KStr::find_bytes(ByteSpan hay, ByteSpan pat) const {
+// 字节级别的比较, 不涉及字符编解码
+static std::size_t find_in_bytes(ByteSpan hay, ByteSpan pat) {
     if (pat.empty()) return 0;
     if (pat.size() > hay.size()) return knpos;
 
@@ -232,8 +225,9 @@ std::size_t KStr::find_bytes(ByteSpan hay, ByteSpan pat) const {
     return knpos;
 }
 
+// 字节级别的比较, 不涉及字符编解码
 // 朴素逆序匹配, BM 算法难以处理逆序
-std::size_t KStr::rfind_bytes(ByteSpan hay, ByteSpan pat) const {
+static std::size_t rfind_in_bytes(ByteSpan hay, ByteSpan pat) {
     if (pat.empty()) return hay.size(); // 表示末尾插入位置
     if (pat.size() > hay.size()) return knpos;
 
@@ -243,27 +237,27 @@ std::size_t KStr::rfind_bytes(ByteSpan hay, ByteSpan pat) const {
     return knpos;
 }
 
-// 查找字符位置（按字符下标），找不到返回 npos
-std::size_t KStr::find(KStr substr) const {
-    auto offset = find_bytes(this->as_bytes(), substr.as_bytes());
-    return (offset != knpos) ? count_chars_before(offset) : knpos;
+std::size_t KStr::find_in_bytes(KStr substr) const {
+    return ::kstring::find_in_bytes(this->as_bytes(), substr.as_bytes());
 }
 
-std::size_t KStr::find_in_byte(KStr substr) const {
-    return find_bytes(this->as_bytes(), substr.as_bytes());
+std::size_t KStr::rfind_in_bytes(KStr substr) const {
+    return ::kstring::rfind_in_bytes(this->as_bytes(), substr.as_bytes());
+}
+
+// 查找字符位置（按字符下标），找不到返回 npos
+std::size_t KStr::find(KStr substr) const {
+    auto offset = ::kstring::find_in_bytes(this->as_bytes(), substr.as_bytes());
+    return (offset != knpos) ? count_chars_before(offset) : knpos;
 }
 
 std::size_t KStr::rfind(KStr substr) const {
-    auto offset = rfind_bytes(this->as_bytes(), substr.as_bytes());
+    auto offset = ::kstring::rfind_in_bytes(this->as_bytes(), substr.as_bytes());
     return (offset != knpos) ? count_chars_before(offset) : knpos;
 }
 
-std::size_t KStr::rfind_in_byte(KStr substr) const {
-    return rfind_bytes(this->as_bytes(), substr.as_bytes());
-}
-
 bool KStr::contains(KStr substr) const {
-    return find_in_byte(substr) != knpos;
+    return ::kstring::find_in_bytes(this->as_bytes(), substr.as_bytes()) != knpos;
 }
 
 bool KStr::starts_with(KStr prefix) const {
@@ -289,7 +283,7 @@ KStr KStr::substr(std::size_t start, std::size_t count) const {
             found_begin = true;
         }
 
-        auto dec = utf8::decode(data_, pos);
+        auto dec = utf8::decode_one(data_, pos);
         pos = dec.next_pos;
         ++idx;
 
@@ -327,7 +321,7 @@ KStr KStr::subrange(std::size_t start, std::size_t end) const {
             break;
         }
 
-        auto dec = utf8::decode(data_, pos);
+        auto dec = utf8::decode_one(data_, pos);
         pos = dec.next_pos;
         ++idx;
     }
@@ -343,24 +337,17 @@ KStr KStr::subrange(std::size_t start, std::size_t end) const {
 }
 
 std::vector<CharIndex> KStr::char_indices() const {
-    std::vector<CharIndex> result;
+    auto decs = utf8::decode_all(data_);
+    std::vector<CharIndex> results;
+    results.reserve(decs.size());
+
     std::size_t pos = 0;
-    std::size_t char_idx = 0;
-
-    while (pos < data_.size()) {
-        std::size_t offset = pos;
-        auto dec = utf8::decode(data_, pos);
-        if (dec.ok) {
-            result.emplace_back(KChar(dec.cp), offset, char_idx);
-            pos = dec.next_pos;
-        } else {
-            result.emplace_back(KChar(kstring::Ill_CODEPOINT), offset, char_idx);
-            ++pos;
-        }
-        ++char_idx;
+    for (std::size_t char_idx = 0; char_idx < decs.size(); char_idx++) {
+        auto dec = decs[char_idx];
+        results.emplace_back(KChar(dec.ok ? dec.cp : kstring::Ill_CODEPOINT), pos, char_idx);
+        pos = dec.next_pos;
     }
-
-    return result;
+    return results;
 }
 
 std::pair<KStr, KStr> KStr::split_at(std::size_t mid) const {
@@ -372,7 +359,7 @@ std::pair<KStr, KStr> KStr::split_exclusive_at(std::size_t mid) const {
     auto pair = split_at(mid);
     const ByteSpan right_bytes = pair.second.as_bytes();
 
-    auto dec = utf8::decode(right_bytes, 0);
+    auto dec = utf8::decode_one(right_bytes, 0);
     std::size_t skip_len = dec.next_pos;
 
     return {pair.first, KStr(ByteSpan(right_bytes.data() + skip_len, right_bytes.size() - skip_len))};
@@ -466,7 +453,7 @@ std::vector<KStr> KStr::split_whitespace() const {
 
     while (pos < data_.size()) {
         std::size_t current = pos;
-        auto dec = utf8::decode(data_, pos);
+        auto dec = utf8::decode_one(data_, pos);
 
         if (! dec.ok) {
             ++pos; // 跳过非法字节

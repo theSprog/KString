@@ -88,19 +88,14 @@ class KStr {
 
     std::size_t char_index_to_byte_offset(std::size_t idx) const;
 
-    std::size_t find_bytes(ByteSpan hay, ByteSpan pat) const;
+    std::size_t find_in_bytes(KStr substr) const;
 
-    // 朴素逆序匹配, BM 算法难以处理逆序
-    std::size_t rfind_bytes(ByteSpan hay, ByteSpan pat) const;
+    std::size_t rfind_in_bytes(KStr substr) const;
 
     // 查找字符位置（按字符下标），找不到返回 npos
     std::size_t find(KStr substr) const;
 
-    std::size_t find_in_byte(KStr substr) const;
-
     std::size_t rfind(KStr substr) const;
-
-    std::size_t rfind_in_byte(KStr substr) const;
 
     bool contains(KStr substr) const;
 

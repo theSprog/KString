@@ -79,9 +79,9 @@ std::size_t utf8_size(CodePoint cp);
 UTF8Encoded encode(CodePoint cp);
 
 // 尝试解码 data[pos...] 开头的字符（失败时返回 false）, next_pos 存放解码后应处的 pos
-UTF8Decoded decode(const ByteSpan& data, std::size_t pos);
+UTF8Decoded decode_one(const ByteSpan& data, std::size_t pos);
 
-UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos);
+UTF8Decoded decode_one_prev(const ByteSpan& data, std::size_t pos);
 std::vector<UTF8Decoded> decode_all(const ByteSpan& data);
 
 // decode range [start, end)
@@ -90,7 +90,7 @@ std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t
 std::size_t char_count(const ByteSpan& data);
 
 // 查找首次出现的 code point（按字符计数）
-std::size_t find(const ByteSpan& data, CodePoint target_codepoint);
+std::size_t find_codepoint(const ByteSpan& data, CodePoint target_codepoint);
 
 void replace_at(ByteVec& data, size_t index, CodePoint cp_new);
 void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new);
@@ -99,6 +99,6 @@ void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new);
 
 // 是否是 ASCII 纯文本
 bool is_all_ascii(const ByteSpan& data);
-std::string debug_codepoint(utf8::CodePoint cp);
+std::string codepoint_to_string(utf8::CodePoint cp);
 } // namespace utf8
 

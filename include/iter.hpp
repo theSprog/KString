@@ -17,7 +17,7 @@ struct CharIterator {
     KChar operator*() const {
         if (cur_pos >= end_pos) return KChar(); // 返回空字符
         if (! decoded) {
-            auto dec = utf8::decode(data_, cur_pos);
+            auto dec = utf8::decode_one(data_, cur_pos);
             current = dec.ok ? KChar(dec.cp) : KChar();
             decoded = true;
         }
@@ -29,7 +29,7 @@ struct CharIterator {
             std::size_t size = current.utf8_size();
             cur_pos += (size == 0) ? 1 : size;
         } else { // 尚未解码则解码获取 next_pos
-            auto dec = utf8::decode(data_, cur_pos);
+            auto dec = utf8::decode_one(data_, cur_pos);
             cur_pos = dec.next_pos;
         }
 
@@ -78,7 +78,7 @@ struct ReverseCharIterator {
         if (cur_pos == 0) return KChar(); // 到达字符串开头，返回空字符
         if (! decoded) {
             // 需要从当前位置向前寻找一个有效的UTF-8字符起始位置
-            auto dec = utf8::decode_prev(data_, cur_pos);
+            auto dec = utf8::decode_one_prev(data_, cur_pos);
             current = dec.ok ? KChar(dec.cp) : KChar();
             decoded = true;
         }
@@ -90,7 +90,7 @@ struct ReverseCharIterator {
             std::size_t size = current.utf8_size();
             cur_pos -= (size == 0) ? 1 : size;
         } else { // 尚未解码则解码获取 next_pos
-            auto dec = utf8::decode_prev(data_, cur_pos);
+            auto dec = utf8::decode_one_prev(data_, cur_pos);
             cur_pos = dec.next_pos;
         }
 

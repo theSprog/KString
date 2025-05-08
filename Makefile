@@ -7,6 +7,7 @@ MODE ?= debug
 # 目录结构
 SRC_DIR := src
 BUILD_DIR := build/$(MODE)
+THIRD_PARTY_BUILD_DIR := build_third_party
 
 TARGET_STATIC_DEBUG := libkstring_debug.a
 TARGET_SHARED_DEBUG := libkstring_debug.so
@@ -16,6 +17,12 @@ TARGET_SHARED := libkstring.so
 # 自动收集源文件
 SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS))
+
+# 第三方库编译
+THIRD_PARTY_DIR := $(SRC_DIR)/third_party
+THIRD_PARTY_SRCS := $(wildcard $(THIRD_PARTY_DIR)/*.cpp)
+THIRD_PARTY_OBJS := $(patsubst $(THIRD_PARTY_DIR)/%.cpp, $(THIRD_PARTY_BUILD_DIR)/%.o, $(THIRD_PARTY_SRCS))
+THIRD_PARTY_CXXFLAGS := -std=c++11 -O2 -Wall -Wextra -Weffc++ -isystem src/third_party
 
 # === 通用编译参数 ===
 COMMON_FLAGS := -std=c++11 -Wall -Wextra -Weffc++ -Iinclude
@@ -36,21 +43,18 @@ DEBUG_FLAGS := -O0 -fno-inline -g \
     -Wreturn-local-addr \
     -fsanitize=address,undefined,bounds \
 	-Wshadow \
-	-Wundef -Wunused -Winvalid-offsetof \
-	-Winvalid-pch -Werror=missing-include-dirs \
-    -fprofile-arcs -ftest-coverage
+	-Wunused -Winvalid-offsetof \
+	-Winvalid-pch -Werror=missing-include-dirs
 
 # Release 模式
 RELEASE_FLAGS := -O2 -DNDEBUG
 
 # 根据模式选择参数
 ifeq ($(MODE),debug)
-    CXXFLAGS := $(COMMON_FLAGS) $(DEBUG_FLAGS)
-    LDFLAGS := -fsanitize=address,undefined,bounds -fprofile-arcs -ftest-coverage
+    CXXFLAGS := $(COMMON_FLAGS) $(DEBUG_FLAGS) -fprofile-arcs -ftest-coverage
     TARGETS := $(TARGET_STATIC_DEBUG) $(TARGET_SHARED_DEBUG)
 else ifeq ($(MODE),release)
     CXXFLAGS := $(COMMON_FLAGS) $(RELEASE_FLAGS)
-    LDFLAGS :=
     TARGETS := $(TARGET_STATIC) $(TARGET_SHARED)
 else
     $(error Unknown MODE=$(MODE). Use MODE=debug or MODE=release)
@@ -60,22 +64,26 @@ endif
 all: $(TARGETS)
 
 # 构建目标
-$(TARGET_STATIC_DEBUG): $(OBJS)
+$(TARGET_STATIC_DEBUG): $(OBJS) $(THIRD_PARTY_OBJS)
 	ar rcs $@ $^
 
-$(TARGET_SHARED_DEBUG): $(OBJS)
+$(TARGET_SHARED_DEBUG): $(OBJS) $(THIRD_PARTY_OBJS)
 	$(CXX) -shared -o $@ $^ $(LDFLAGS)
 
-$(TARGET_STATIC): $(OBJS)
+$(TARGET_STATIC): $(OBJS) $(THIRD_PARTY_OBJS)
 	ar rcs $@ $^
 
-$(TARGET_SHARED): $(OBJS)
+$(TARGET_SHARED): $(OBJS) $(THIRD_PARTY_OBJS)
 	$(CXX) -shared -o $@ $^ $(LDFLAGS)
 
 # 对象文件规则
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -fPIC -c $< -o $@
+	
+$(THIRD_PARTY_BUILD_DIR)/%.o: $(SRC_DIR)/third_party/%.cpp
+	@mkdir -p $(THIRD_PARTY_BUILD_DIR)
+	$(CXX) $(THIRD_PARTY_CXXFLAGS) -fPIC -c $< -o $@
 
 # release 构建模式
 release:
@@ -85,7 +93,12 @@ release:
 clean:
 	rm -rf build *.a *.so *.gcno *.gcda
 
-format:
-	find ./ -regex '.*\.\(cpp\|hpp\)' -exec clang-format -i {} +
+clean_all: clean
+	rm -rf build_third_party
 
-.PHONY: all release clean
+format:
+	find ./ \
+	  -path ./src/third_party -prune -o \
+	  -regex '.*\.\(cpp\|hpp\)' -exec clang-format -i {} +
+
+.PHONY: all release clean format

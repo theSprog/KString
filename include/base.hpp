@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 #include <array>
@@ -106,6 +107,14 @@ class span {
             count = size_ - offset;
         }
         return span<element_type>(data_ + offset, count);
+    }
+
+    friend bool operator==(const span<T>& lhs, const span<T>& rhs) {
+        if (lhs.size() != rhs.size()) return false;
+        for (std::size_t i = 0; i < lhs.size(); i++) {
+            if (lhs[i] != rhs[i]) return false;
+        }
+        return true;
     }
 };
 

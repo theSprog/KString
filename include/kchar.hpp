@@ -40,7 +40,7 @@ class KChar {
         ByteVec tmp;
         for (int i = 0; i < 4 && bytes[i]; ++i) tmp.push_back(static_cast<uint8_t>(bytes[i]));
 
-        utf8::UTF8Decoded decode_result = utf8::decode(tmp, 0);
+        utf8::UTF8Decoded decode_result = utf8::decode_one(tmp, 0);
         if (! decode_result.ok) {
             throw std::invalid_argument("Invalid UTF-8 character passed to KChar");
         }

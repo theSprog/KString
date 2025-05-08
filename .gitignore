@@ -8,3 +8,4 @@ libkstring_debug.so
 libkstring.a
 libkstring.so
 
+build_third_party

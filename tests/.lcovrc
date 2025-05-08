@@ -1,2 +1,3 @@
 exclude = */usr/include/*
 exclude = */test_src/*
+exclude = */src/third_party/*

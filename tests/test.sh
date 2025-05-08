@@ -3,6 +3,8 @@ set -e
 
 # 切换到脚本所在的目录
 cd "$(dirname "$0")"
+make -C ..
+make clean
 
 # 如果没有传入测试名参数
 if [ $# -eq 0 ]; then

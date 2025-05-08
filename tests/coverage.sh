@@ -7,6 +7,7 @@ cd "$(dirname "$0")"
 # 最终 coverage 文件
 FINAL_COVERAGE="coverage/coverage.info"
 
+make -C ..
 # 如果存在旧的 *.info，先删除
 make clean
 
