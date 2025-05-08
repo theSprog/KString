@@ -2,8 +2,9 @@
 
 #include <cstdint>
 #include <vector>
+#include <array>
 
-namespace KString {
+namespace kstring {
 template <typename T>
 class span {
   public:
@@ -120,4 +121,4 @@ enum : CodePoint {
 enum : std::size_t {
     knpos = static_cast<std::size_t>(-1)
 };
-} // namespace KString
+} // namespace kstring

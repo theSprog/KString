@@ -2,8 +2,8 @@
 #include <doctest/doctest.h>
 #include "../../src/sso.hpp"
 
-using KString::Byte;
-using KString::SSOBytes;
+using kstring::Byte;
+using kstring::SSOBytes;
 
 TEST_CASE("Default constructor should initialize empty SSO") {
     SSOBytes s;

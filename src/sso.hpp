@@ -3,7 +3,7 @@
 #include <string>
 #include "base.hpp"
 
-namespace KString {
+namespace kstring {
 class SSOBytes {
   public:
     enum : std::size_t {
@@ -176,4 +176,4 @@ class SSOBytes {
         assign(list.begin(), list.end());
     }
 };
-} // namespace KString
+} // namespace kstring

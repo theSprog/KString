@@ -2,7 +2,7 @@
 #include <array>
 #include "sso.hpp"
 
-namespace KString {
+namespace kstring {
 bool SSOBytes::is_sso() const {
     const uint8_t tag_value = heap.tag; // 强制访问为 heap 联合成员
     return (tag_value & kHeapFlag) == 0;
@@ -315,4 +315,4 @@ SSOBytes::const_iterator SSOBytes::cbegin() const {
 SSOBytes::const_iterator SSOBytes::cend() const {
     return end();
 }
-}; // namespace KString
+}; // namespace kstring

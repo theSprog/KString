@@ -35,6 +35,9 @@ DEBUG_FLAGS := -O0 -fno-inline -g \
     -Wnon-virtual-dtor \
     -Wreturn-local-addr \
     -fsanitize=address,undefined,bounds \
+	-Wshadow \
+	-Wundef -Wunused -Winvalid-offsetof \
+	-Winvalid-pch -Werror=missing-include-dirs \
     -fprofile-arcs -ftest-coverage
 
 # Release 模式

@@ -3,21 +3,21 @@
 #include "kchar.hpp"
 #include "utf8.hpp"
 
-namespace KString {
+namespace kstring {
 struct CharIterator {
-    ByteSpan data;
+    ByteSpan data_;
     std::size_t cur_pos; // 当前字符的起始字节位置
     std::size_t end_pos; // 字符串末尾字节位置
     mutable KChar current;
     mutable bool decoded;
 
     CharIterator(ByteSpan data, std::size_t start_pos)
-        : data(data), cur_pos(start_pos), end_pos(data.size()), current(), decoded(false) {}
+        : data_(data), cur_pos(start_pos), end_pos(data.size()), current(), decoded(false) {}
 
     KChar operator*() const {
         if (cur_pos >= end_pos) return KChar(); // 返回空字符
         if (! decoded) {
-            auto dec = utf8::decode(data, cur_pos);
+            auto dec = utf8::decode(data_, cur_pos);
             current = dec.ok ? KChar(dec.cp) : KChar();
             decoded = true;
         }
@@ -29,7 +29,7 @@ struct CharIterator {
             std::size_t size = current.utf8_size();
             cur_pos += (size == 0) ? 1 : size;
         } else { // 尚未解码则解码获取 next_pos
-            auto dec = utf8::decode(data, cur_pos);
+            auto dec = utf8::decode(data_, cur_pos);
             cur_pos = dec.next_pos;
         }
 
@@ -38,7 +38,7 @@ struct CharIterator {
     }
 
     bool operator==(const CharIterator& other) const {
-        return cur_pos == other.cur_pos && data.data() == other.data.data();
+        return cur_pos == other.cur_pos && data_.data() == other.data_.data();
     }
 
     bool operator!=(const CharIterator& other) const {
@@ -67,18 +67,18 @@ struct CharRange {
 };
 
 struct ReverseCharIterator {
-    ByteSpan data;
+    ByteSpan data_;
     std::size_t cur_pos; // 当前字符的末尾字节位置（注意：是末尾！）
     mutable KChar current;
     mutable bool decoded;
 
-    ReverseCharIterator(ByteSpan data, std::size_t end_pos) : data(data), cur_pos(end_pos), current(), decoded(false) {}
+    ReverseCharIterator(ByteSpan data, std::size_t end_pos) : data_(data), cur_pos(end_pos), current(), decoded(false) {}
 
     KChar operator*() const {
         if (cur_pos == 0) return KChar(); // 到达字符串开头，返回空字符
         if (! decoded) {
             // 需要从当前位置向前寻找一个有效的UTF-8字符起始位置
-            auto dec = utf8::decode_prev(data, cur_pos);
+            auto dec = utf8::decode_prev(data_, cur_pos);
             current = dec.ok ? KChar(dec.cp) : KChar();
             decoded = true;
         }
@@ -90,7 +90,7 @@ struct ReverseCharIterator {
             std::size_t size = current.utf8_size();
             cur_pos -= (size == 0) ? 1 : size;
         } else { // 尚未解码则解码获取 next_pos
-            auto dec = utf8::decode_prev(data, cur_pos);
+            auto dec = utf8::decode_prev(data_, cur_pos);
             cur_pos = dec.next_pos;
         }
 
@@ -99,7 +99,7 @@ struct ReverseCharIterator {
     }
 
     bool operator==(const ReverseCharIterator& other) const {
-        return cur_pos == other.cur_pos && data.data() == other.data.data();
+        return cur_pos == other.cur_pos && data_.data() == other.data_.data();
     }
 
     bool operator!=(const ReverseCharIterator& other) const {
@@ -153,4 +153,4 @@ struct CharIndex {
         return a.byte_offset < b.byte_offset;
     }
 };
-}; // namespace KString
+}; // namespace kstring

@@ -14,7 +14,7 @@
 #define HAS_MEMMEM 0
 #endif
 
-namespace KString {
+namespace kstring {
 KStr::KStr() : data_() {}
 
 // 该函数假设 cstr 是以 null 结尾的有效 UTF-8 字符串
@@ -147,7 +147,7 @@ KChar KStr::char_at(std::size_t idx) const {
         auto dec = utf8::decode(data_, pos);
         if (! dec.ok) {
             if (i == idx) {
-                return KChar(KString::Ill_CODEPOINT); // 视作独立非法字节
+                return KChar(kstring::Ill_CODEPOINT); // 视作独立非法字节
             }
             ++i;
             ++pos;
@@ -354,7 +354,7 @@ std::vector<CharIndex> KStr::char_indices() const {
             result.emplace_back(KChar(dec.cp), offset, char_idx);
             pos = dec.next_pos;
         } else {
-            result.emplace_back(KChar(KString::Ill_CODEPOINT), offset, char_idx);
+            result.emplace_back(KChar(kstring::Ill_CODEPOINT), offset, char_idx);
             ++pos;
         }
         ++char_idx;
@@ -647,4 +647,4 @@ KStr KStr::strip_suffix(KStr suffix) const {
     return *this;
 }
 
-} // namespace KString
+} // namespace kstring

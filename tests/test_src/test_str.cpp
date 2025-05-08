@@ -3,8 +3,8 @@
 #include <doctest/doctest.h>
 #include "../../include/kstr.hpp"
 
-using KString::KChar;
-using KString::KStr;
+using kstring::KChar;
+using kstring::KStr;
 using utf8::ByteSpan;
 
 TEST_CASE("KStr constructors and basic accessors") {
@@ -147,8 +147,8 @@ TEST_CASE("KStr char_at, byte_at, operator[]") {
     SUBCASE("char_at decoding fails") {
         std::vector<uint8_t> raw = {0xe4, 0xff, 0xff, 0xff};
         KStr s2(raw);
-        CHECK_EQ(s2.char_at(0), KChar(KString::Ill_CODEPOINT));
-        CHECK_EQ(s2.char_at(2), KChar(KString::Ill_CODEPOINT));
+        CHECK_EQ(s2.char_at(0), KChar(kstring::Ill_CODEPOINT));
+        CHECK_EQ(s2.char_at(2), KChar(kstring::Ill_CODEPOINT));
 
         std::vector<uint8_t> raw2 = {'a', 0xe4, 0xff, 0xff, 0xff, 'b'};
     }
@@ -171,13 +171,13 @@ TEST_CASE("KStr find/rfind/contains") {
     }
 
     SUBCASE("find not found") {
-        CHECK(s.find(("xyz")) == KString::knpos);
+        CHECK(s.find(("xyz")) == kstring::knpos);
     }
 
     SUBCASE("rfind ascii") {
         CHECK(s.rfind(("a")) == 7);
         CHECK(s.rfind(("abc")) == 7);
-        CHECK(s.rfind(("xyz")) == KString::knpos);
+        CHECK(s.rfind(("xyz")) == kstring::knpos);
     }
 
     SUBCASE("rfind unicode") {
@@ -198,7 +198,7 @@ TEST_CASE("KStr find/rfind/contains") {
     }
 
     SUBCASE("pattern too long") {
-        CHECK(KStr("a").find(("abc")) == KString::knpos);
+        CHECK(KStr("a").find(("abc")) == kstring::knpos);
     }
 }
 
@@ -342,12 +342,10 @@ TEST_CASE("char_indices") {
     CHECK(vec[1].ch.value() == 'a');
     CHECK(vec[2].ch.value() == 0x597D); // 好
     CHECK(vec[3].ch.value() == 'b');
-    CHECK(vec[4].ch.value() == KString::Ill_CODEPOINT);
+    CHECK(vec[4].ch.value() == kstring::Ill_CODEPOINT);
 }
 
 TEST_CASE("KStr split family basic functionality and corner cases") {
-    using namespace KString;
-
     KStr s("a,b,c,,d");
 
     SUBCASE("split normal") {
@@ -658,8 +656,6 @@ TEST_CASE("KStr match/match_indices basic and edge cases") {
 }
 
 TEST_CASE("KStr trim functions") {
-    using namespace KString;
-
     SUBCASE("empty string") {
         KStr s("");
         CHECK(s.trim() == "");
@@ -746,8 +742,6 @@ TEST_CASE("KStr trim functions") {
 }
 
 TEST_CASE("KStr::strip_prefix and strip_suffix") {
-    using namespace KString;
-
     SUBCASE("empty string and empty prefix/suffix") {
         KStr s("");
         CHECK(s.strip_prefix("") == "");

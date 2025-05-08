@@ -7,7 +7,7 @@
 #include "base.hpp"
 #include "utf8.hpp"
 
-namespace KString {
+namespace kstring {
 class KChar {
     CodePoint cp_; // Unicode CodePoint
 
@@ -169,6 +169,6 @@ class KChar {
         return os;
     }
 };
-} // namespace KString
+} // namespace kstring
 
 

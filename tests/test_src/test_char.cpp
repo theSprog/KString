@@ -2,7 +2,7 @@
 #include <doctest/doctest.h>
 #include "../../include/kchar.hpp"
 
-using KString::KChar;
+using kstring::KChar;
 
 TEST_CASE("KChar constructor and value") {
     KChar a('A');

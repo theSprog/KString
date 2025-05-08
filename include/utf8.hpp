@@ -7,10 +7,10 @@
 #include "base.hpp"
 
 namespace utf8 {
-using KString::Byte;
-using KString::ByteSpan;
-using KString::ByteVec;
-using KString::CodePoint;
+using kstring::Byte;
+using kstring::ByteSpan;
+using kstring::ByteVec;
+using kstring::CodePoint;
 
 struct UTF8Encoded {
     const uint8_t* begin() const {
@@ -43,9 +43,9 @@ struct UTF8Decoded {
     UTF8Decoded() : cp(0), ok(false), next_pos(0) {}
 
     // success
-    UTF8Decoded(CodePoint cp, size_t next_pos) : cp(cp), ok(true), next_pos(next_pos) {}
+    UTF8Decoded(CodePoint _cp, size_t _next_pos) : cp(_cp), ok(true), next_pos(_next_pos) {}
 
-    UTF8Decoded(CodePoint cp, bool ok, size_t next_pos) : cp(cp), ok(ok), next_pos(next_pos) {}
+    UTF8Decoded(CodePoint _cp, bool _ok, size_t _next_pos) : cp(_cp), ok(_ok), next_pos(_next_pos) {}
 
     friend std::ostream& operator<<(std::ostream& os, const UTF8Decoded& d) {
         if (d.ok) {

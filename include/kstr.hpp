@@ -1,7 +1,7 @@
 #pragma once
 #include "iter.hpp"
 
-namespace KString {
+namespace kstring {
 class KStr {
   public:
     KStr();
@@ -212,4 +212,4 @@ class KStr {
   private:
     ByteSpan data_;
 };
-} // namespace KString
+} // namespace kstring
