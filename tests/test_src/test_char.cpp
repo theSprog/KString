@@ -1,6 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
-#include "../../include/core/char.hpp"
+#include "../../include/kchar.hpp"
 
 using KString::KChar;
 
@@ -22,10 +22,10 @@ TEST_CASE("KChar::is_ascii and related checks") {
     CHECK(a.is_ascii());
     CHECK(a.is_alpha());
     CHECK(a.is_upper());
-    CHECK(!a.is_lower());
-    CHECK(!a.is_digit());
+    CHECK(! a.is_lower());
+    CHECK(! a.is_digit());
     CHECK(a.is_alnum());
-    CHECK(!a.is_whitespace());
+    CHECK(! a.is_whitespace());
     CHECK(a.is_printable());
 
     KChar d('0');
@@ -39,9 +39,9 @@ TEST_CASE("KChar::is_ascii and related checks") {
     CHECK(lf.is_whitespace());
 
     KChar euro(0x20AC); // €
-    CHECK(!euro.is_ascii());
-    CHECK(!euro.is_alpha());
-    CHECK(!euro.is_printable());
+    CHECK(! euro.is_ascii());
+    CHECK(! euro.is_alpha());
+    CHECK(! euro.is_printable());
 }
 
 TEST_CASE("KChar::to_ascii_char") {
@@ -94,7 +94,7 @@ TEST_CASE("KChar::is_valid") {
 TEST_CASE("to_lower fall-through branch") {
     KChar non_upper('1');
     auto result = non_upper.to_lower();
-    CHECK(result == non_upper);  // 分支覆盖：return *this;
+    CHECK(result == non_upper); // 分支覆盖：return *this;
 }
 
 TEST_CASE("print printable char") {

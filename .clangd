@@ -16,3 +16,4 @@ CompileFlags:
     - -Werror=vla
     - -Wnon-virtual-dtor
     - -Wreturn-local-addr
+    - -Wno-sign-conversion

@@ -1,6 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
-#include "../../include/core/sso.hpp"
+#include "../../src/sso.hpp"
 
 using KString::Byte;
 using KString::SSOBytes;
@@ -162,7 +162,7 @@ TEST_CASE("clear() should reset state") {
     heap.clear();
     CHECK(heap.empty());
     CHECK(heap.size() == 0);
-    CHECK(!heap.is_sso());  // never back to sso
+    CHECK(! heap.is_sso()); // never back to sso
 }
 
 TEST_CASE("push_back() transitions from SSO to heap") {

@@ -1,0 +1,104 @@
+#pragma once
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <iostream>
+#include "base.hpp"
+
+namespace utf8 {
+using KString::Byte;
+using KString::ByteSpan;
+using KString::ByteVec;
+using KString::CodePoint;
+
+struct UTF8Encoded {
+    const uint8_t* begin() const {
+        return bytes;
+    }
+
+    const uint8_t* end() const {
+        return bytes + len;
+    }
+
+    uint8_t bytes[4];
+    std::size_t len;
+
+    friend std::ostream& operator<<(std::ostream& os, const UTF8Encoded& d) {
+        os << "UTF8Encoded{len=" << d.len << ", bytes=[";
+        for (std::size_t i = 0; i < d.len; ++i) {
+            if (i > 0) os << ' ';
+            os << "0x" << std::hex << std::uppercase << static_cast<int>(d.bytes[i]);
+        }
+        os << "]}";
+        return os;
+    }
+};
+
+struct UTF8Decoded {
+    CodePoint cp;
+    bool ok;
+    size_t next_pos;
+
+    UTF8Decoded() : cp(0), ok(false), next_pos(0) {}
+
+    // success
+    UTF8Decoded(CodePoint cp, size_t next_pos) : cp(cp), ok(true), next_pos(next_pos) {}
+
+    UTF8Decoded(CodePoint cp, bool ok, size_t next_pos) : cp(cp), ok(ok), next_pos(next_pos) {}
+
+    friend std::ostream& operator<<(std::ostream& os, const UTF8Decoded& d) {
+        if (d.ok) {
+            os << "UTF8Decoded{cp=U+" << std::hex << std::uppercase << d.cp << ", next_pos=" << std::dec << d.next_pos
+               << ", ok=true}";
+        } else {
+            os << "UTF8Decoded{<invalid>}";
+        }
+        return os;
+    }
+};
+
+} // namespace utf8
+
+namespace utf8 {
+// 获取当前字节起始的 UTF-8 编码的总长度（若非法则返回 0）
+std::size_t lead_utf8_length(Byte lead);
+
+// 判断某个位置的 len 个字节是否是合法的 UTF-8 编码
+bool is_valid_range(const ByteSpan& data, std::size_t pos, std::size_t len);
+
+// 获取第一个非法位置（返回 -1 表示全部合法）
+std::size_t first_invalid(const ByteSpan& data);
+// 是否是合法 UTF-8 编码
+bool is_valid(const ByteSpan& data);
+
+// 获取 code point 所需 UTF-8 长度（1~4 字节）, 非法则返回 0 长度
+std::size_t utf8_size(CodePoint cp);
+
+// 编码一个 code point 为 UTF-8 序列
+UTF8Encoded encode(CodePoint cp);
+
+// 尝试解码 data[pos...] 开头的字符（失败时返回 false）, next_pos 存放解码后应处的 pos
+UTF8Decoded decode(const ByteSpan& data, std::size_t pos);
+
+UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos);
+std::vector<UTF8Decoded> decode_all(const ByteSpan& data);
+
+// decode range [start, end)
+std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t end);
+// 查找字符数（不是字节数）
+std::size_t char_count(const ByteSpan& data);
+
+// 查找首次出现的 code point（按字符计数）
+std::size_t find(const ByteSpan& data, CodePoint target_codepoint);
+
+void replace_at(ByteVec& data, size_t index, CodePoint cp_new);
+void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new);
+
+void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new);
+
+// 是否是 ASCII 纯文本
+bool is_all_ascii(const ByteSpan& data);
+std::string debug_codepoint(utf8::CodePoint cp);
+} // namespace utf8
+

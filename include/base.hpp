@@ -1,11 +1,9 @@
 #pragma once
 
-#include <cstddef>
-#include <array>
+#include <cstdint>
 #include <vector>
-#include <type_traits>
 
-namespace internal {
+namespace KString {
 template <typename T>
 class span {
   public:
@@ -109,4 +107,17 @@ class span {
         return span<element_type>(data_ + offset, count);
     }
 };
-}; // namespace internal
+
+using Byte = uint8_t;
+using ByteSpan = span<const Byte>; // read only
+using ByteVec = std::vector<Byte>; // allow to modify
+using CodePoint = uint32_t;
+
+enum : CodePoint {
+    Ill_CODEPOINT = 0xFFFD
+};
+
+enum : std::size_t {
+    knpos = static_cast<std::size_t>(-1)
+};
+} // namespace KString

@@ -15,7 +15,7 @@ CXXFLAGS += -Werror=uninitialized \
 	-Wreturn-local-addr
 CXXFLAGS += -fsanitize=address,undefined,bounds
 
-LDFLAGS :=
+LDFLAGS := ../libkstring_debug.a
 
 CONV_CXXFLAGS = -g -fprofile-arcs -ftest-coverage
 
@@ -57,7 +57,7 @@ coverage: $(SRC)
 ifneq ($(wildcard $(SRC)),)
 	$(CXX) $(SRC) $(CXXFLAGS) $(CONV_CXXFLAGS) $(LDFLAGS) -o $(BIN)
 	./$(BIN)
-	lcov --capture --directory . --output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --config-file $(PWD)/.lcovrc --ignore-errors unused
+	lcov --capture --directory ./$(BIN_DIR)/$(TEST_DIR_NAME)  --directory ../build/debug --output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --config-file $(PWD)/.lcovrc --ignore-errors unused
 	genhtml $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --output-directory $(COVERAGE_DIR)/$(TEST_DIR_NAME)
 	@echo "Coverage report generated for $(TEST) in $(COVERAGE_DIR)/$(TEST)"
 else

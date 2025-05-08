@@ -1,11 +1,11 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <doctest/doctest.h>
-#include "../../include/core/str.hpp"
+#include "../../include/kstr.hpp"
 
-using internal::utf8::ByteSpan;
 using KString::KChar;
 using KString::KStr;
+using utf8::ByteSpan;
 
 TEST_CASE("KStr constructors and basic accessors") {
     SUBCASE("Default constructor yields empty string") {
@@ -49,7 +49,7 @@ TEST_CASE("KStr constructors and basic accessors") {
 TEST_CASE("KStr iter_chars() yields correct KChar sequence") {
     KStr s("你好abc"); // UTF-8: 3 bytes + 3 bytes + 1+1+1
 
-    std::vector<internal::utf8::CodePoint> codepoints;
+    std::vector<utf8::CodePoint> codepoints;
     for (KChar ch : s.iter_chars()) {
         codepoints.push_back(ch.value());
     }
@@ -76,7 +76,7 @@ TEST_CASE("KStr iter_chars() yields correct KChar sequence") {
 TEST_CASE("KStr iter_chars_rev() yields correct KChar reverse sequence") {
     KStr s("你好abc"); // UTF-8: 3 bytes + 3 bytes + 1+1+1
 
-    std::vector<internal::utf8::CodePoint> codepoints;
+    std::vector<utf8::CodePoint> codepoints;
     for (KChar ch : s.iter_chars_rev()) {
         codepoints.push_back(ch.value());
     }
@@ -147,8 +147,8 @@ TEST_CASE("KStr char_at, byte_at, operator[]") {
     SUBCASE("char_at decoding fails") {
         std::vector<uint8_t> raw = {0xe4, 0xff, 0xff, 0xff};
         KStr s2(raw);
-        CHECK_EQ(s2.char_at(0), KChar(KString::KChar::Ill));
-        CHECK_EQ(s2.char_at(2), KChar(KString::KChar::Ill));
+        CHECK_EQ(s2.char_at(0), KChar(KString::Ill_CODEPOINT));
+        CHECK_EQ(s2.char_at(2), KChar(KString::Ill_CODEPOINT));
 
         std::vector<uint8_t> raw2 = {'a', 0xe4, 0xff, 0xff, 0xff, 'b'};
     }
@@ -171,13 +171,13 @@ TEST_CASE("KStr find/rfind/contains") {
     }
 
     SUBCASE("find not found") {
-        CHECK(s.find(("xyz")) == KStr::knpos);
+        CHECK(s.find(("xyz")) == KString::knpos);
     }
 
     SUBCASE("rfind ascii") {
         CHECK(s.rfind(("a")) == 7);
         CHECK(s.rfind(("abc")) == 7);
-        CHECK(s.rfind(("xyz")) == KStr::knpos);
+        CHECK(s.rfind(("xyz")) == KString::knpos);
     }
 
     SUBCASE("rfind unicode") {
@@ -198,7 +198,7 @@ TEST_CASE("KStr find/rfind/contains") {
     }
 
     SUBCASE("pattern too long") {
-        CHECK(KStr("a").find(("abc")) == KStr::knpos);
+        CHECK(KStr("a").find(("abc")) == KString::knpos);
     }
 }
 
@@ -342,7 +342,7 @@ TEST_CASE("char_indices") {
     CHECK(vec[1].ch.value() == 'a');
     CHECK(vec[2].ch.value() == 0x597D); // 好
     CHECK(vec[3].ch.value() == 'b');
-    CHECK(vec[4].ch.value() == KChar::Ill);
+    CHECK(vec[4].ch.value() == KString::Ill_CODEPOINT);
 }
 
 TEST_CASE("KStr split family basic functionality and corner cases") {

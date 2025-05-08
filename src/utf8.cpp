@@ -1,66 +1,10 @@
-#pragma once
-
 #include <cstddef>
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <iostream>
-#include "span.hpp"
+#include "utf8.hpp"
 
-namespace internal {
 namespace utf8 {
-using Byte = uint8_t;
-using ByteSpan = span<const Byte>; // read only
-using ByteVec = std::vector<Byte>; // allow to modify
-using CodePoint = uint32_t;
-
-struct UTF8Encoded {
-    const uint8_t* begin() const {
-        return bytes;
-    }
-
-    const uint8_t* end() const {
-        return bytes + len;
-    }
-
-    uint8_t bytes[4];
-    std::size_t len;
-
-    friend std::ostream& operator<<(std::ostream& os, const UTF8Encoded& d) {
-        os << "UTF8Encoded{len=" << d.len << ", bytes=[";
-        for (std::size_t i = 0; i < d.len; ++i) {
-            if (i > 0) os << ' ';
-            os << "0x" << std::hex << std::uppercase << static_cast<int>(d.bytes[i]);
-        }
-        os << "]}";
-        return os;
-    }
-};
-
-struct UTF8Decoded {
-    CodePoint cp;
-    bool ok;
-    size_t next_pos;
-
-    UTF8Decoded() : cp(0), ok(false), next_pos(0) {}
-
-    // success
-    UTF8Decoded(CodePoint cp, size_t next_pos) : cp(cp), ok(true), next_pos(next_pos) {}
-
-    UTF8Decoded(CodePoint cp, bool ok, size_t next_pos) : cp(cp), ok(ok), next_pos(next_pos) {}
-
-    friend std::ostream& operator<<(std::ostream& os, const UTF8Decoded& d) {
-        if (d.ok) {
-            os << "UTF8Decoded{cp=U+" << std::hex << std::uppercase << d.cp << ", next_pos=" << std::dec << d.next_pos
-               << ", ok=true}";
-        } else {
-            os << "UTF8Decoded{<invalid>}";
-        }
-        return os;
-    }
-};
-
-namespace {
 // 获取当前字节起始的 UTF-8 编码的总长度（若非法则返回 0）
 std::size_t lead_utf8_length(Byte lead) {
     if ((lead & 0b10000000) == 0b00000000) return 1;
@@ -97,10 +41,9 @@ bool is_valid_range(const ByteSpan& data, std::size_t pos, std::size_t len) {
 
     return true;
 }
-} // namespace
 
-// 获取第一个非法位置（返回 data.size() 表示合法）
-inline std::size_t first_invalid(const ByteSpan& data) {
+// 获取第一个非法位置（返回 -1 表示全部合法）
+std::size_t first_invalid(const ByteSpan& data) {
     std::size_t i = 0;
     while (i < data.size()) {
         std::size_t len = lead_utf8_length(data[i]);
@@ -110,16 +53,16 @@ inline std::size_t first_invalid(const ByteSpan& data) {
 
         i += len;
     }
-    return data.size();
+    return static_cast<std::size_t>(-1);
 }
 
 // 是否是合法 UTF-8 编码
-inline bool is_valid(const ByteSpan& data) {
-    return first_invalid(data) == data.size();
+bool is_valid(const ByteSpan& data) {
+    return first_invalid(data) == static_cast<std::size_t>(-1);
 }
 
 // 获取 code point 所需 UTF-8 长度（1~4 字节）, 非法则返回 0 长度
-inline std::size_t codepoint_utf8_size(CodePoint cp) {
+std::size_t utf8_size(CodePoint cp) {
     if (cp <= 0x7F) return 1;
     if (cp <= 0x7FF) return 2;
     if (cp <= 0xFFFF) return 3;
@@ -128,7 +71,7 @@ inline std::size_t codepoint_utf8_size(CodePoint cp) {
 }
 
 // 编码一个 code point 为 UTF-8 序列
-inline UTF8Encoded encode(CodePoint cp) {
+UTF8Encoded encode(CodePoint cp) {
     UTF8Encoded out;
     if (cp <= 0x7F) {
         out.bytes[0] = static_cast<uint8_t>(cp);
@@ -153,7 +96,7 @@ inline UTF8Encoded encode(CodePoint cp) {
 }
 
 // 尝试解码 data[pos...] 开头的字符（失败时返回 false）, next_pos 存放解码后应处的 pos
-inline UTF8Decoded decode(const ByteSpan& data, std::size_t pos) {
+UTF8Decoded decode(const ByteSpan& data, std::size_t pos) {
     if (pos >= data.size()) return UTF8Decoded(0, false, data.size());
 
     Byte lead = data[pos];
@@ -179,25 +122,26 @@ inline UTF8Decoded decode(const ByteSpan& data, std::size_t pos) {
 
     CodePoint cp = 0;
     if (len == 1) {
-        cp = lead;
+        cp = CodePoint(lead);
     } else if (len == 2) {
-        cp = ((lead & 0b00011111) << 6) | (data[pos + 1] & 0b00111111);
+        cp = CodePoint(((lead & 0b00011111) << 6) | (data[pos + 1] & 0b00111111));
     } else if (len == 3) {
-        cp = ((lead & 0b00001111) << 12) | ((data[pos + 1] & 0b00111111) << 6) | (data[pos + 2] & 0b00111111);
+        cp =
+            CodePoint(((lead & 0b00001111) << 12) | ((data[pos + 1] & 0b00111111) << 6) | (data[pos + 2] & 0b00111111));
     } else if (len == 4) {
-        cp = ((lead & 0b00000111) << 18) | ((data[pos + 1] & 0b00111111) << 12) | ((data[pos + 2] & 0b00111111) << 6) |
-             (data[pos + 3] & 0b00111111);
+        cp = CodePoint(((lead & 0b00000111) << 18) | ((data[pos + 1] & 0b00111111) << 12) |
+                       ((data[pos + 2] & 0b00111111) << 6) | (data[pos + 3] & 0b00111111));
     }
 
     // 再次验证（例如禁止 overlong 或 surrogate）
-    if (codepoint_utf8_size(cp) != len) return UTF8Decoded(0, false, pos + 1);
+    if (utf8_size(cp) != len) return UTF8Decoded(0, false, pos + 1);
     if (cp >= 0xD800 && cp <= 0xDFFF) return UTF8Decoded(0, false, pos + 1);
     if (cp > 0x10FFFF) return UTF8Decoded(0, false, pos + 1);
 
     return UTF8Decoded(cp, pos + len);
 }
 
-inline UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos) {
+UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos) {
     if (pos == 0) return UTF8Decoded(0, false, 0);
 
     // 最多看 4 字节
@@ -205,7 +149,7 @@ inline UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos) {
 
     for (std::size_t p = pos - 1; p >= start; --p) {
         // 试图从 p decode 成合法字符
-        auto dec = internal::utf8::decode(data, p);
+        auto dec = utf8::decode(data, p);
         if (dec.ok) {
             if (dec.next_pos == pos)
                 return UTF8Decoded(dec.cp, p);         // 正好 decode 到 [p, pos)
@@ -220,27 +164,21 @@ inline UTF8Decoded decode_prev(const ByteSpan& data, std::size_t pos) {
     return UTF8Decoded(0, false, pos - 1);
 }
 
-inline std::vector<UTF8Decoded> decode_all(const ByteSpan& data) {
+std::vector<UTF8Decoded> decode_all(const ByteSpan& data) {
     std::vector<UTF8Decoded> results;
     std::size_t pos = 0;
 
     while (pos < data.size()) {
         UTF8Decoded decode_result = decode(data, pos);
         results.push_back(decode_result);
-
-        if (! decode_result.ok) {
-            // 出错时只前进 1 字节，避免死循环
-            ++pos;
-        } else {
-            pos = decode_result.next_pos;
-        }
+        pos = decode_result.next_pos;
     }
 
     return results;
 }
 
 // decode range [start, end)
-inline std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t end) {
+std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t end) {
     std::vector<UTF8Decoded> results;
 
     if (start >= end) return results;
@@ -256,11 +194,8 @@ inline std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start,
             pos = decode_result.next_pos;
         } else {
             // 解码失败 / next_pos 越界都视为非法
-            results.emplace_back(UTF8Decoded(0, false, 0)); // UTF8Decoded(false)
-            if (! decode_result.ok)                         // 解码失败只前进一步
-                ++pos;
-            else // next_pos 越界则 pos 直接越界
-                pos = decode_result.next_pos;
+            results.emplace_back(0, false, 0); // UTF8Decoded(false)
+            pos = decode_result.next_pos;
         }
     }
 
@@ -268,7 +203,7 @@ inline std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start,
 }
 
 // 查找字符数（不是字节数）
-inline std::size_t char_count(const ByteSpan& data) {
+std::size_t char_count(const ByteSpan& data) {
     std::size_t count = 0;
     for (std::size_t pos = 0; pos < data.size();) {
         UTF8Decoded decode_result = decode(data, pos);
@@ -280,7 +215,7 @@ inline std::size_t char_count(const ByteSpan& data) {
 }
 
 // 查找首次出现的 code point（按字符计数）
-inline std::size_t find(const ByteSpan& data, CodePoint target_codepoint) {
+std::size_t find(const ByteSpan& data, CodePoint target_codepoint) {
     std::size_t index = 0;
     for (std::size_t pos = 0; pos < data.size();) {
         UTF8Decoded decode_result = decode(data, pos);
@@ -292,7 +227,7 @@ inline std::size_t find(const ByteSpan& data, CodePoint target_codepoint) {
     return static_cast<std::size_t>(-1);
 }
 
-inline void replace_at(ByteVec& data, size_t index, CodePoint cp_new) {
+void replace_at(ByteVec& data, size_t index, CodePoint cp_new) {
     UTF8Decoded decode_result = decode(data, index);
     if (! decode_result.ok) return;
     std::size_t next_pos = decode_result.next_pos;
@@ -329,7 +264,7 @@ inline void replace_at(ByteVec& data, size_t index, CodePoint cp_new) {
     std::copy(encoded.begin(), encoded.end(), data.begin() + index);
 }
 
-inline void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
+void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
     std::size_t pos = 0;
     UTF8Encoded encoded = encode(cp_new); // 预编码 cp_new，避免重复计算
     std::size_t new_len = encoded.len;
@@ -374,7 +309,7 @@ inline void replace_all(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
     }
 }
 
-inline void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
+void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
     std::size_t pos = 0;
     while (pos < data.size()) {
         UTF8Decoded decode_result = decode(data, pos);
@@ -390,16 +325,15 @@ inline void replace_first(ByteVec& data, CodePoint cp_old, CodePoint cp_new) {
 }
 
 // 是否是 ASCII 纯文本
-inline bool is_all_ascii(const ByteSpan& data) {
+bool is_all_ascii(const ByteSpan& data) {
     for (Byte b : data) {
         if (b >= 0x80) return false;
     }
     return true;
 }
 
-inline std::string debug_codepoint(CodePoint cp) {
+std::string debug_codepoint(CodePoint cp) {
     UTF8Encoded bytes = utf8::encode(cp);
     return std::string(bytes.begin(), bytes.end()); // 转为 std::string 输出
 }
 } // namespace utf8
-} // namespace internal

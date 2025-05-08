@@ -1,9 +1,9 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <doctest/doctest.h>
-#include "../../include/internal/utf8.hpp" // 替换为你的实际头文件路径
+#include "../../include/utf8.hpp"
 
-using namespace internal::utf8;
+using namespace utf8;
 
 TEST_CASE("lead_utf8_length") {
     CHECK(lead_utf8_length(0x00) == 1);
@@ -14,13 +14,13 @@ TEST_CASE("lead_utf8_length") {
 }
 
 TEST_CASE("codepoint_utf8_size - all branches") {
-    CHECK(codepoint_utf8_size(0x00) == 1);     // ASCII
-    CHECK(codepoint_utf8_size(0x07FF) == 2);   // two-byte upper limit
-    CHECK(codepoint_utf8_size(0x0800) == 3);   // start of 3-byte
-    CHECK(codepoint_utf8_size(0xFFFF) == 3);   // max of 3-byte
-    CHECK(codepoint_utf8_size(0x10000) == 4);  // start of 4-byte
-    CHECK(codepoint_utf8_size(0x10FFFF) == 4); // max Unicode
-    CHECK(codepoint_utf8_size(0x110000) == 0); // invalid > 0x10FFFF
+    CHECK(utf8_size(0x00) == 1);     // ASCII
+    CHECK(utf8_size(0x07FF) == 2);   // two-byte upper limit
+    CHECK(utf8_size(0x0800) == 3);   // start of 3-byte
+    CHECK(utf8_size(0xFFFF) == 3);   // max of 3-byte
+    CHECK(utf8_size(0x10000) == 4);  // start of 4-byte
+    CHECK(utf8_size(0x10FFFF) == 4); // max Unicode
+    CHECK(utf8_size(0x110000) == 0); // invalid > 0x10FFFF
 }
 
 TEST_CASE("is_valid_range") {
@@ -36,7 +36,7 @@ TEST_CASE("is_valid_range") {
 
 TEST_CASE("first_invalid and is_valid") {
     ByteVec valid = {'h', 'e', 0xE4, 0xBD, 0xA0}; // "he你"
-    CHECK(first_invalid(valid) == valid.size());
+    CHECK(first_invalid(valid) == -1);
     CHECK(is_valid(valid));
 
     valid.push_back(0xFF);
