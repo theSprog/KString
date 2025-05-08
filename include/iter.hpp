@@ -18,7 +18,7 @@ struct CharIterator {
         if (cur_pos >= end_pos) return KChar(); // 返回空字符
         if (! decoded) {
             auto dec = utf8::decode_one(data_, cur_pos);
-            current = dec.ok ? KChar(dec.cp) : KChar();
+            current = dec.ok ? KChar(dec.codepoint) : KChar();
             decoded = true;
         }
         return current;
@@ -79,7 +79,7 @@ struct ReverseCharIterator {
         if (! decoded) {
             // 需要从当前位置向前寻找一个有效的UTF-8字符起始位置
             auto dec = utf8::decode_one_prev(data_, cur_pos);
-            current = dec.ok ? KChar(dec.cp) : KChar();
+            current = dec.ok ? KChar(dec.codepoint) : KChar();
             decoded = true;
         }
         return current;

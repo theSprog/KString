@@ -12,6 +12,7 @@ using kstring::ByteSpan;
 using kstring::ByteVec;
 using kstring::CodePoint;
 
+// 非法码点用 0xFFFD(0xEF 0xBF 0xBD) 替代
 struct UTF8Encoded {
     const uint8_t* begin() const {
         return bytes;
@@ -36,25 +37,29 @@ struct UTF8Encoded {
 };
 
 struct UTF8Decoded {
-    CodePoint cp;
+    CodePoint codepoint;
     bool ok;
     size_t next_pos;
 
-    UTF8Decoded() : cp(0), ok(false), next_pos(0) {}
+    UTF8Decoded() : codepoint(0), ok(false), next_pos(0) {}
 
     // success
-    UTF8Decoded(CodePoint _cp, size_t _next_pos) : cp(_cp), ok(true), next_pos(_next_pos) {}
+    UTF8Decoded(CodePoint _cp, size_t _next_pos) : codepoint(_cp), ok(true), next_pos(_next_pos) {}
 
-    UTF8Decoded(CodePoint _cp, bool _ok, size_t _next_pos) : cp(_cp), ok(_ok), next_pos(_next_pos) {}
+    UTF8Decoded(CodePoint _cp, bool _ok, size_t _next_pos) : codepoint(_cp), ok(_ok), next_pos(_next_pos) {}
 
     friend std::ostream& operator<<(std::ostream& os, const UTF8Decoded& d) {
         if (d.ok) {
-            os << "UTF8Decoded{cp=U+" << std::hex << std::uppercase << d.cp << ", next_pos=" << std::dec << d.next_pos
-               << ", ok=true}";
+            os << "UTF8Decoded{cp=U+" << std::hex << std::uppercase << d.codepoint << ", next_pos=" << std::dec
+               << d.next_pos << ", ok=true}";
         } else {
             os << "UTF8Decoded{<invalid>}";
         }
         return os;
+    }
+
+    static UTF8Decoded ill(size_t _next_pos) {
+        return UTF8Decoded(kstring::ILL_CODEPOINT, false, _next_pos);
     }
 };
 
@@ -75,6 +80,11 @@ bool is_valid(const ByteSpan& data);
 // 获取 code point 所需 UTF-8 长度（1~4 字节）, 非法则返回 0 长度
 std::size_t utf8_size(CodePoint cp);
 
+bool is_surrogate_codepoint(CodePoint cp);
+bool is_valid_codepoint(CodePoint cp);
+bool is_noncharacter(CodePoint cp);
+bool is_overflow_codepoint(CodePoint cp);
+
 // 编码一个 code point 为 UTF-8 序列
 UTF8Encoded encode(CodePoint cp);
 
@@ -82,10 +92,11 @@ UTF8Encoded encode(CodePoint cp);
 UTF8Decoded decode_one(const ByteSpan& data, std::size_t pos);
 
 UTF8Decoded decode_one_prev(const ByteSpan& data, std::size_t pos);
-std::vector<UTF8Decoded> decode_all(const ByteSpan& data);
+std::vector<CodePoint> decode_all(const ByteSpan& data);
+ByteVec encode_all(const std::vector<CodePoint>& code_vec);
 
 // decode range [start, end)
-std::vector<UTF8Decoded> decode_range(const ByteSpan& data, size_t start, size_t end);
+std::vector<CodePoint> decode_range(const ByteSpan& data, size_t start, size_t end);
 // 查找字符数（不是字节数）
 std::size_t char_count(const ByteSpan& data);
 

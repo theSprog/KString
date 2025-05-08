@@ -155,14 +155,14 @@ TEST_CASE("KStr char_at, byte_at, operator[]") {
     SUBCASE("operator[] throws if decoding fails") {
         std::vector<uint8_t> raw = {0xe4, 0xff};
         KStr s2(raw);
-        CHECK(s2[0] == ByteSpan({0xe4}));
+        CHECK(s2[0] == ByteSpan({0xe4, 0xff}));
     }
 
     SUBCASE("char_at decoding fails") {
         std::vector<uint8_t> raw = {0xe4, 0xff, 0xff, 0xff};
         KStr s2(raw);
-        CHECK_EQ(s2.char_at(0), KChar(kstring::Ill_CODEPOINT));
-        CHECK_EQ(s2.char_at(2), KChar(kstring::Ill_CODEPOINT));
+        CHECK_EQ(s2.char_at(0), KChar(kstring::ILL_CODEPOINT));
+        CHECK_EQ(s2.char_at(2), KChar(kstring::ILL_CODEPOINT));
 
         std::vector<uint8_t> raw2 = {'a', 0xe4, 0xff, 0xff, 0xff, 'b'};
     }
@@ -220,11 +220,11 @@ TEST_CASE("test byte_offset_to_char_index") {
     KStr s = "你a好"; // UTF-8 字节数 = 3 + 1 + 3 = 7
     CHECK_EQ(s.count_chars_before(0), 0);
     CHECK_EQ(s.count_chars_before(1), 1);
-    CHECK_EQ(s.count_chars_before(2), 2);
+    CHECK_EQ(s.count_chars_before(2), 1);
     CHECK_EQ(s.count_chars_before(3), 1);
     CHECK_EQ(s.count_chars_before(4), 2);
     CHECK_EQ(s.count_chars_before(5), 3);
-    CHECK_EQ(s.count_chars_before(6), 4);
+    CHECK_EQ(s.count_chars_before(6), 3);
     CHECK_EQ(s.count_chars_before(7), 3);
 
     CHECK_THROWS_AS(s.count_chars_before(8), std::out_of_range);
@@ -319,44 +319,14 @@ TEST_CASE("split_at and split_exclusive_at basic behavior (C++11)") {
     }
 }
 
-TEST_CASE("char_indices and char_index_to_byte_offset") {
+TEST_CASE("char_index_to_byte_offset") {
     KStr s("你a好b"); // 字节序列: [E4 BD A0] [61] [E5 A5 BD] [62]
-
-    auto indices = s.char_indices();
-    REQUIRE(indices.size() == 4);
-
-    CHECK(indices[0].ch == KChar(0x4F60)); // 你
-    CHECK(indices[0].byte_offset == 0);    // byte offset 0
-    CHECK(indices[0].char_index == 0);     // char index 0
-
-    CHECK(indices[1].ch == KChar('a'));
-    CHECK(indices[1].byte_offset == 3); // byte offset 3
-    CHECK(indices[1].char_index == 1);  // char index 1
-
-    CHECK(indices[2].ch == KChar(0x597D)); // 好
-    CHECK(indices[2].byte_offset == 4);    // byte offset 4
-    CHECK(indices[2].char_index == 2);     // char index 2
-
-    CHECK(indices[3].ch == KChar('b'));
-    CHECK(indices[3].byte_offset == 7); // byte offset 7
-    CHECK(indices[3].char_index == 3);  // char index 3
 
     CHECK(s.char_index_to_byte_offset(0) == 0);                         // "你"
     CHECK(s.char_index_to_byte_offset(1) == 3);                         // "a"
     CHECK(s.char_index_to_byte_offset(2) == 4);                         // "好"
     CHECK(s.char_index_to_byte_offset(3) == 7);                         // "b"
     CHECK_THROWS_AS(s.char_index_to_byte_offset(4), std::out_of_range); // 越界
-}
-
-TEST_CASE("char_indices") {
-    KStr s("你a好b\xff");
-    auto vec = s.char_indices();
-    REQUIRE(vec.size() == 5);
-    CHECK(vec[0].ch.value() == 0x4F60); // 你
-    CHECK(vec[1].ch.value() == 'a');
-    CHECK(vec[2].ch.value() == 0x597D); // 好
-    CHECK(vec[3].ch.value() == 'b');
-    CHECK(vec[4].ch.value() == kstring::Ill_CODEPOINT);
 }
 
 TEST_CASE("KStr split family basic functionality and corner cases") {

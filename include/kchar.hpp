@@ -16,15 +16,15 @@ class KChar {
     KChar() : cp_(0) {}
 
     bool is_surrogate() const {
-        return cp_ >= 0xD800 && cp_ <= 0xDFFF;
+        return utf8::is_surrogate_codepoint(cp_);
     }
 
     bool is_noncharacter() const {
-        return (cp_ & 0xFFFE) == 0xFFFE && cp_ <= 0x10FFFF;
+        return utf8::is_noncharacter(cp_);
     }
 
     bool is_valid() const {
-        return cp_ <= 0x10FFFF && ! is_surrogate();
+        return utf8::is_valid_codepoint(cp_);
     }
 
     // 从 Unicode code point 构造
@@ -50,7 +50,7 @@ class KChar {
             throw std::invalid_argument("Too many bytes: KChar must be a single UTF-8 character");
         }
 
-        *this = KChar(decode_result.cp);
+        *this = KChar(decode_result.codepoint);
     }
 
     CodePoint value() const {

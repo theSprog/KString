@@ -7,8 +7,8 @@ namespace kstring {
 class SSOBytes {
   public:
     enum : std::size_t {
-        HeapViewSize = sizeof(std::vector<Byte>) + sizeof(uint8_t),
-        SSO_CAPACITY = HeapViewSize - 1
+        HEAP_VIEW_SIZE = sizeof(std::vector<Byte>) + sizeof(uint8_t),
+        SSO_CAPACITY = HEAP_VIEW_SIZE - 1
     };
 
   private:

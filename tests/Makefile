@@ -57,8 +57,8 @@ coverage: $(SRC)
 ifneq ($(wildcard $(SRC)),)
 	$(CXX) $(SRC) $(CXXFLAGS) $(CONV_CXXFLAGS) $(LDFLAGS) -o $(BIN)
 	./$(BIN)
-	lcov --capture --directory ./$(BIN_DIR)/$(TEST_DIR_NAME) --directory ../build/debug --output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --config-file $(PWD)/.lcovrc --ignore-errors unused
-	genhtml $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --output-directory $(COVERAGE_DIR)/$(TEST_DIR_NAME)
+	lcov --quiet --capture --directory ./$(BIN_DIR)/$(TEST_DIR_NAME) --directory ../build/debug --output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --config-file $(PWD)/.lcovrc --ignore-errors unused
+	genhtml --quiet $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --output-directory $(COVERAGE_DIR)/$(TEST_DIR_NAME)
 	@echo "Coverage report generated for $(TEST) in $(COVERAGE_DIR)/$(TEST)"
 else
 	@echo "❌ Error: $(SRC) not found. Please check if '$(TEST_SRC_NAME).cpp' exists."

@@ -139,13 +139,13 @@ KChar KStr::char_at(std::size_t idx) const {
         auto dec = utf8::decode_one(data_, pos);
         if (! dec.ok) {
             if (i == idx) {
-                return KChar(kstring::Ill_CODEPOINT); // 视作独立非法字节
+                return KChar(kstring::ILL_CODEPOINT); // 视作独立非法字节
             }
             ++i;
             ++pos;
         } else {
             if (i == idx) {
-                return KChar(dec.cp);
+                return KChar(dec.codepoint);
             }
             ++i;
             pos = dec.next_pos;
@@ -176,7 +176,7 @@ uint8_t KStr::byte_at(std::size_t idx) const {
      *   s.count_chars_before(7) -> 3   // '你a好'
      *
      *   s.count_chars_before(1) -> 1  // 视为单个非法字符
-     *   s.count_chars_before(2) -> 2  // 视为两个非法字符
+     *   s.count_chars_before(2) -> 1  // 视为单个非法字符 (2 byte)
      */
 std::size_t KStr::count_chars_before(std::size_t byte_offset) const {
     if (byte_offset > data_.size()) {
@@ -336,20 +336,6 @@ KStr KStr::subrange(std::size_t start, std::size_t end) const {
     return KStr(ByteSpan(&data_[begin_byte], end_byte - begin_byte));
 }
 
-std::vector<CharIndex> KStr::char_indices() const {
-    auto decs = utf8::decode_all(data_);
-    std::vector<CharIndex> results;
-    results.reserve(decs.size());
-
-    std::size_t pos = 0;
-    for (std::size_t char_idx = 0; char_idx < decs.size(); char_idx++) {
-        auto dec = decs[char_idx];
-        results.emplace_back(KChar(dec.ok ? dec.cp : kstring::Ill_CODEPOINT), pos, char_idx);
-        pos = dec.next_pos;
-    }
-    return results;
-}
-
 std::pair<KStr, KStr> KStr::split_at(std::size_t mid) const {
     std::size_t byte_offset = char_index_to_byte_offset(mid);
     return {KStr(ByteSpan(&data_[0], byte_offset)), KStr(ByteSpan(&data_[byte_offset], data_.size() - byte_offset))};
@@ -460,7 +446,7 @@ std::vector<KStr> KStr::split_whitespace() const {
             continue;
         }
 
-        KChar ch(dec.cp);
+        KChar ch(dec.codepoint);
         pos = dec.next_pos;
 
         if (ch.is_whitespace()) {

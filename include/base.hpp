@@ -124,7 +124,7 @@ using ByteVec = std::vector<Byte>; // allow to modify
 using CodePoint = uint32_t;
 
 enum : CodePoint {
-    Ill_CODEPOINT = 0xFFFD
+    ILL_CODEPOINT = 0xFFFD
 };
 
 enum : std::size_t {

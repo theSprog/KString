@@ -108,8 +108,6 @@ class KStr {
     // [start, end) 区间
     KStr subrange(std::size_t start, std::size_t end) const;
 
-    std::vector<CharIndex> char_indices() const;
-
     std::pair<KStr, KStr> split_at(std::size_t mid) const;
     std::pair<KStr, KStr> split_exclusive_at(std::size_t mid) const;
     // 核心 split 函数, 最多分割 count 次

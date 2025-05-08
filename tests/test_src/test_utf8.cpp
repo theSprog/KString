@@ -54,7 +54,7 @@ TEST_CASE("encode and decode") {
     ByteVec data(encoded.begin(), encoded.end());
     UTF8Decoded decode_result = decode_one(data, 0);
     CHECK(decode_result.ok);
-    CHECK(decode_result.cp == cp);
+    CHECK(decode_result.codepoint == cp);
     CHECK(decode_result.next_pos == 3);
 
     UTF8Encoded enc2 = encode(0x07FF); // 2 bytes
@@ -87,27 +87,27 @@ TEST_CASE("decode_prev") {
 
         auto dec1 = decode_one_prev(span, 1);
         REQUIRE(dec1.ok);
-        CHECK(dec1.cp == 'a');
+        CHECK(dec1.codepoint == 'a');
         CHECK(dec1.next_pos == 0);
 
         auto dec2 = decode_one_prev(span, 4);
         REQUIRE(dec2.ok);
-        CHECK(dec2.cp == 0x4F60); // '你'
+        CHECK(dec2.codepoint == 0x4F60); // '你'
         CHECK(dec2.next_pos == 1);
 
         auto dec3 = decode_one_prev(span, 7);
         REQUIRE(dec3.ok);
-        CHECK(dec3.cp == 0x597D); // '好'
+        CHECK(dec3.codepoint == 0x597D); // '好'
         CHECK(dec3.next_pos == 4);
 
         auto dec4 = decode_one_prev(span, 11);
         REQUIRE(dec4.ok);
-        CHECK(dec4.cp == 0x1F600); // 😀
+        CHECK(dec4.codepoint == 0x1F600); // 😀
         CHECK(dec4.next_pos == 7);
 
         auto dec5 = decode_one_prev(span, 12);
         REQUIRE(dec5.ok);
-        CHECK(dec5.cp == 'b');
+        CHECK(dec5.codepoint == 'b');
         CHECK(dec5.next_pos == 11);
     }
 
@@ -139,7 +139,7 @@ TEST_CASE("decode_prev") {
         std::vector<uint8_t> raw = {0x80, 0xe4, 0xbd, 0xa0};
         auto dec = decode_one_prev(ByteSpan(raw.data(), raw.size()), 4);
         REQUIRE(dec.ok);
-        CHECK(dec.cp == 0x4F60); // '你'
+        CHECK(dec.codepoint == 0x4F60); // '你'
         CHECK(dec.next_pos == 1);
     }
 
@@ -148,7 +148,7 @@ TEST_CASE("decode_prev") {
         auto span = ByteSpan(reinterpret_cast<const uint8_t*>(ascii.data()), ascii.size());
         auto dec = decode_one_prev(span, 3);
         REQUIRE(dec.ok);
-        CHECK(dec.cp == 'c');
+        CHECK(dec.codepoint == 'c');
         CHECK(dec.next_pos == 2);
     }
 
@@ -169,13 +169,13 @@ TEST_CASE("decode_prev") {
 
         auto dec3 = decode_one_prev(span, dec2.next_pos);
         REQUIRE(dec3.ok);
-        CHECK(dec3.cp == 'x');
+        CHECK(dec3.codepoint == 'x');
         CHECK(dec3.next_pos == 2);
 
         // decode_prev at pos=2 -> é
         auto dec4 = decode_one_prev(span, dec3.next_pos);
         REQUIRE(dec4.ok);
-        CHECK(dec4.cp == 0x00E9);
+        CHECK(dec4.codepoint == 0x00E9);
         CHECK(dec4.next_pos == 0);
     }
 }
@@ -184,7 +184,7 @@ TEST_CASE("decode detail") {
     ByteVec data = {static_cast<Byte>(0xC3), static_cast<Byte>(0xA9)}; // é
     UTF8Decoded decode_result = decode_one(data, 0);
     CHECK(decode_result.ok);
-    CHECK(decode_result.cp == 0xE9); // 'é'
+    CHECK(decode_result.codepoint == 0xE9); // 'é'
     CHECK(decode_result.next_pos == 2);
 
     ByteVec data2 = {static_cast<Byte>(0xFF)}; // invalid
@@ -250,13 +250,13 @@ TEST_CASE("replace_all - diff > 0 (1-byte to 4-byte)") {
     UTF8Decoded decode_result;
     decode_result = decode_one(data, 0);
     CHECK(decode_result.ok);
-    CHECK(decode_result.cp == 'A');
+    CHECK(decode_result.codepoint == 'A');
     decode_result = decode_one(data, decode_result.next_pos);
-    CHECK(decode_result.ok);            // 😀
-    CHECK(decode_result.cp == 0x1F600); // 😀
+    CHECK(decode_result.ok);                   // 😀
+    CHECK(decode_result.codepoint == 0x1F600); // 😀
     decode_result = decode_one(data, decode_result.next_pos);
     CHECK(decode_result.ok);
-    CHECK(decode_result.cp == 'C');
+    CHECK(decode_result.codepoint == 'C');
 }
 
 TEST_CASE("replace_all - diff < 0 (4-byte to 1-byte)") {
@@ -278,28 +278,28 @@ TEST_CASE("decode_one: valid UTF-8 single characters") {
         ByteVec data = {'A'};
         UTF8Decoded decode_result = decode_one(data, 0);
         CHECK(decode_result.ok);
-        CHECK(decode_result.cp == 'A');
+        CHECK(decode_result.codepoint == 'A');
     }
 
     SUBCASE("2-byte character - U+00A9 (©)") {
         ByteVec data = {0xC2, 0xA9}; // ©
         UTF8Decoded decode_result = decode_one(data, 0);
         CHECK(decode_result.ok);
-        CHECK(decode_result.cp == 0x00A9);
+        CHECK(decode_result.codepoint == 0x00A9);
     }
 
     SUBCASE("3-byte character - U+20AC (€)") {
         ByteVec data = {0xE2, 0x82, 0xAC}; // €
         UTF8Decoded decode_result = decode_one(data, 0);
         CHECK(decode_result.ok);
-        CHECK(decode_result.cp == 0x20AC);
+        CHECK(decode_result.codepoint == 0x20AC);
     }
 
     SUBCASE("4-byte character - U+1F601 (😁)") {
         ByteVec data = {0xF0, 0x9F, 0x98, 0x81}; // 😁
         UTF8Decoded decode_result = decode_one(data, 0);
         CHECK(decode_result.ok);
-        CHECK(decode_result.cp == 0x1F601);
+        CHECK(decode_result.codepoint == 0x1F601);
     }
 }
 
@@ -320,34 +320,32 @@ TEST_CASE("decode_all - basic ascii and utf8") {
     ByteVec data = {'h', 'e', static_cast<Byte>(0xE4), static_cast<Byte>(0xBD), static_cast<Byte>(0xA0)}; // he你
     auto result = decode_all(data);
     REQUIRE(result.size() == 3);
-    CHECK(result[0].ok);
-    CHECK(result[0].cp == 'h');
-    CHECK(result[1].cp == 'e');
-    CHECK(result[2].cp == 0x4F60); // 你
+    CHECK(result[0] == 'h');
+    CHECK(result[1] == 'e');
+    CHECK(result[2] == 0x4F60); // 你
 }
 
 TEST_CASE("decode_all - illegal bytes in middle") {
     ByteVec data = {'A', 0xFF, 'B'};
     auto result = decode_all(data);
     REQUIRE(result.size() == 3);
-    CHECK(result[0].ok);
-    CHECK_FALSE(result[1].ok); // 0xFF is illegal lead
-    CHECK(result[2].ok);
+    CHECK(result[0] == 'A');
+    CHECK(result[1] == kstring::ILL_CODEPOINT); // 0xFF is illegal lead
+    CHECK(result[2] == 'B');
 }
 
 TEST_CASE("decode_all - continuation byte alone") {
     ByteVec data = {static_cast<Byte>(0x80)}; // continuation without leader
     auto result = decode_all(data);
     REQUIRE(result.size() == 1);
-    CHECK_FALSE(result[0].ok);
+    CHECK(result[0] == kstring::ILL_CODEPOINT);
 }
 
 TEST_CASE("decode_all - overlong encoding") {
     ByteVec data = {static_cast<Byte>(0xC0), static_cast<Byte>(0xAF)}; // overlong '/'
     auto result = decode_all(data);
-    REQUIRE(result.size() == 2); // 两个非法字节
-    CHECK_FALSE(result[0].ok);
-    CHECK_FALSE(result[1].ok);
+    REQUIRE(result.size() == 1); // 一个非法字节(overlang)
+    CHECK(result[0] == kstring::ILL_CODEPOINT);
 }
 
 TEST_CASE("decode_all - empty input") {
@@ -360,18 +358,18 @@ TEST_CASE("decode_range - normal range") {
     ByteVec data = {'x', static_cast<Byte>(0xE4), static_cast<Byte>(0xBD), static_cast<Byte>(0xA0), 'y'}; // x你y
     auto result = decode_range(data, 0, data.size());
     REQUIRE(result.size() == 3);
-    CHECK(result[0].cp == 'x');
-    CHECK(result[1].cp == 0x4F60);
-    CHECK(result[2].cp == 'y');
+    CHECK(result[0] == 'x');
+    CHECK(result[1] == 0x4F60);
+    CHECK(result[2] == 'y');
 }
 
 TEST_CASE("decode_range - normal range") {
     ByteVec data = {'x', static_cast<Byte>(0xFF), 'y'}; // x<?>y
     auto result = decode_range(data, 0, data.size());
     REQUIRE(result.size() == 3);
-    CHECK(result[0].cp == 'x');
-    CHECK_FALSE(result[1].ok);
-    CHECK(result[2].cp == 'y');
+    CHECK(result[0] == 'x');
+    CHECK(result[1] == kstring::ILL_CODEPOINT);
+    CHECK(result[2] == 'y');
 }
 
 TEST_CASE("decode_range - truncated at utf8 boundary") {
@@ -381,14 +379,14 @@ TEST_CASE("decode_range - truncated at utf8 boundary") {
                     static_cast<Byte>(0x98),
                     static_cast<Byte>(0x81)}; // a😁
     auto result = decode_range(data, 0, 4);   // only a + first 3 bytes of 😁
-    REQUIRE(result.size() == 4);
-    CHECK(result[0].ok);
-    CHECK_FALSE(result[1].ok); // 😁 被截断了
+    REQUIRE(result.size() == 2);
+    CHECK(result[0] == 'a');
+    CHECK(result[1] == kstring::ILL_CODEPOINT); // 😁 被截断了
 
-    auto result2 = decode_range(data, 0, 5);   // a + 😁
+    auto result2 = decode_range(data, 0, 5); // a + 😁
     REQUIRE(result2.size() == 2);
-    CHECK(result2[0].ok);
-    CHECK(result2[1].ok); // 😁 未被截断
+    CHECK(result2[0] == 'a');
+    CHECK(codepoint_to_string(result2[1]) == "😁"); // 😁 未被截断
 }
 
 TEST_CASE("decode_range - start > end") {
@@ -401,8 +399,8 @@ TEST_CASE("decode_range - end beyond data") {
     ByteVec data = {'A', 'B'};
     auto result = decode_range(data, 0, 100);
     REQUIRE(result.size() == 2);
-    CHECK(result[0].ok);
-    CHECK(result[1].ok);
+    CHECK(result[0] == 'A');
+    CHECK(result[1] == 'B');
 }
 
 TEST_CASE("decode_range - start beyond data") {
@@ -426,3 +424,192 @@ TEST_CASE("print UTF8Encoded & UTF8Decoded") {
     CHECK(oss2.str() == "UTF8Decoded{<invalid>}");
 }
 
+TEST_CASE("decode_all normal completely testing") {
+    // warning: to_bytes 存在悬垂指针风险。是否安全，完全取决于调用者如何使用 ByteSpan
+    // initializer_list 作为 lambda 参数传入的，它的生命周期会延续到 lambda 执行完毕
+    auto to_bytes = [](std::initializer_list<uint8_t> list) { return ByteSpan(list.begin(), list.size()); };
+
+    SUBCASE("Empty input") {
+        auto result = decode_all(to_bytes({}));
+        CHECK(result.empty());
+    }
+
+    SUBCASE("Valid ASCII") {
+        auto result = decode_all(to_bytes({'H', 'e', 'l', 'l', 'o'}));
+        REQUIRE(result.size() == 5);
+        for (int i = 0; i < 5; ++i) {
+            CHECK(result[i] == static_cast<uint8_t>("Hello"[i]));
+        }
+    }
+
+    SUBCASE("Valid multi-byte: © € 😀") {
+        // ©(U+00A9), €(U+20AC), 😀(U+1F600)
+        auto result = decode_all(to_bytes({
+            0xC2,
+            0xA9, // ©
+            0xE2,
+            0x82,
+            0xAC, // €
+            0xF0,
+            0x9F,
+            0x98,
+            0x80 // 😀
+        }));
+        REQUIRE(result.size() == 3);
+        CHECK(result[0] == 0xA9);
+        CHECK(result[1] == 0x20AC);
+        CHECK(result[2] == 0x1F600);
+    }
+
+    SUBCASE("Invalid UTF-8: overlong encoding of ASCII") {
+        // U+0000 encoded with 2 bytes: 0xC0 0x80 — invalid
+        auto result = decode_all(ByteSpan({0xC0, 0x80}));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT); // invalid
+    }
+
+    SUBCASE("Invalid continuation byte only") {
+        // 0x80 without a leading byte
+        auto result = decode_all(ByteSpan({0x80}));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Truncated 3-byte character") {
+        // 0xE2, 0x82 — should be followed by 0xAC (Euro sign)
+        auto result = decode_all(to_bytes({0xE2, 0x82}));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT); // 0xE2 0x82 (0xAC)
+    }
+
+    SUBCASE("Mixed valid and invalid sequences") {
+        auto result = decode_all(to_bytes({
+            'A', // valid
+            0xE2,
+            0x82,
+            0xAC, // €
+            0xFF, // invalid byte
+            'B',
+            0xF0,
+            0x9F,
+            0x98,
+            0x80, // 😀
+            0xC0,
+            0xAF // invalid overlong
+        }));
+        REQUIRE(result.size() == 6);
+        CHECK(result[0] == 'A');
+        CHECK(result[1] == 0x20AC);
+        CHECK(result[2] == kstring::ILL_CODEPOINT);
+        CHECK(result[3] == 'B');
+        CHECK(result[4] == 0x1F600);
+        CHECK(result[5] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Valid + continuation noise") {
+        auto result = decode_all(to_bytes({
+            0xE2,
+            0x82,
+            0xAC, // €
+            0x80, // invalid continuation
+            0xF0,
+            0x9F,
+            0x98,
+            0x80 // 😀
+        }));
+        REQUIRE(result.size() == 3);
+        CHECK(result[0] == 0x20AC);
+        CHECK(result[1] == kstring::ILL_CODEPOINT); // 0x80 is invalid alone
+        CHECK(result[2] == 0x1F600);
+    }
+}
+
+TEST_CASE("decode illegal completely testing") {
+    auto to_bytes = [](std::initializer_list<uint8_t> list) { return ByteSpan(list.begin(), list.size()); };
+
+    SUBCASE("Illegal: overlong encoding of ASCII") {
+        auto result = decode_all(ByteSpan({
+            0xC1,
+            0x81 // U+0041 ('A') encoded in 2 bytes (overlong)
+        }));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT); // overlong
+    }
+
+    SUBCASE("Illegal: surrogate code point (U+D800)") {
+        // U+D800 = 0xED 0xA0 0x80 is not valid in UTF-8
+        auto result = decode_all(to_bytes({0xED, 0xA0, 0x80}));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Illegal: lone continuation byte") {
+        auto result = decode_all(to_bytes({0x80, 0xBF}));
+        REQUIRE(result.size() == 2);
+        CHECK(result[0] == kstring::ILL_CODEPOINT);
+        CHECK(result[1] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Illegal: lone leading byte") {
+        auto result = decode_all(to_bytes({0xE2}));
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Illegal: truncated 4-byte sequence") {
+        auto result = decode_all(to_bytes({
+            0xF0,
+            0x9F,
+            0x98 // Should be 4 bytes but not
+        }));
+        REQUIRE(result.size() == 1); // 单个被截断的序列
+        CHECK(result[0] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Illegal: invalid codepoint > U+10FFFF") {
+        // F8-FF are not legal UTF-8 leading bytes
+        auto result = decode_all(to_bytes({
+            0xF8,
+            0x88,
+            0x80,
+            0x80,
+            0x80 // 5-byte sequence
+        }));
+        for (const auto& d : result) CHECK(d == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Mixed valid + illegal (ASCII + overlong + valid)") {
+        auto result = decode_all(to_bytes({'X',
+                                           0xC0,
+                                           0x80, // overlong for null
+                                           'Y',
+                                           0xED,
+                                           0xA0,
+                                           0x80, // surrogate
+                                           'Z'}));
+        REQUIRE(result.size() == 5);
+        CHECK(result[0] == 'X');
+        CHECK(result[1] == kstring::ILL_CODEPOINT); // 0xC0 0x80
+        CHECK(result[2] == 'Y');
+        CHECK(result[3] == kstring::ILL_CODEPOINT); // 0xED
+        CHECK(result[4] == 'Z');
+    }
+
+    SUBCASE("Garbage bytes mixed in valid UTF-8 stream") {
+        auto result = decode_all(to_bytes({
+            0xE4,
+            0xBD,
+            0xA0, // 你 (U+4F60)
+            0xFF,
+            0xFE, // invalid
+            0xE5,
+            0xA5,
+            0xBD // 好 (U+597D)
+        }));
+        REQUIRE(result.size() == 4);
+        CHECK(result[0] == 0x4F60);
+        CHECK(result[1] == kstring::ILL_CODEPOINT); // 0xFF
+        CHECK(result[2] == kstring::ILL_CODEPOINT); // 0xFE
+        CHECK(result[3] == 0x597D);
+    }
+}
