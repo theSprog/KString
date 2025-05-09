@@ -46,7 +46,7 @@ DEBUG_FLAGS := -O0 -fno-inline -g \
 	-Wunused -Winvalid-offsetof \
 	-Winvalid-pch -Werror=missing-include-dirs
 
-# Release 模式
+# Release 模式, 所有 assert 应该失效
 RELEASE_FLAGS := -O2 -DNDEBUG
 
 # 根据模式选择参数

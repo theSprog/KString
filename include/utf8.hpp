@@ -72,8 +72,11 @@ std::size_t lead_utf8_length(Byte lead);
 // 判断某个位置的 len 个字节是否是合法的 UTF-8 编码
 bool is_valid_range(const ByteSpan& data, std::size_t pos, std::size_t len);
 
-// 获取第一个非法位置（返回 -1 表示全部合法）
-std::size_t first_invalid(const ByteSpan& data);
+// 获取第一个非法位置（返回 knpos 表示全部合法）
+size_t first_invalid(const ByteSpan& data);
+std::size_t count_valid_bytes(const ByteSpan& data);
+std::pair<std::size_t, std::size_t> count_valid_bytes_chars(const ByteSpan& data);
+
 // 是否是合法 UTF-8 编码
 bool is_valid(const ByteSpan& data);
 

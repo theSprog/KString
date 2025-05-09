@@ -45,6 +45,62 @@ TEST_CASE("first_invalid and is_valid") {
     CHECK_FALSE(is_valid(valid));
 }
 
+TEST_CASE("count_valid_bytes and count_valid_bytes_chars") {
+    SUBCASE("All ASCII") {
+        ByteVec data = {'h', 'e', 'l', 'l', 'o'};
+        CHECK(count_valid_bytes(data) == data.size());
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 5);
+        CHECK(result.second == 5);
+    }
+
+    SUBCASE("Valid multi-byte UTF-8") {
+        ByteVec data = {0xE4, 0xBD, 0xA0}; // U+4F60 ("你")
+        CHECK(count_valid_bytes(data) == 3);
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 3);
+        CHECK(result.second == 1);
+    }
+
+    SUBCASE("Middle invalid byte") {
+        ByteVec data = {'A', 0xE4, 0xBD, 0xFF, 'B'};
+        CHECK(count_valid_bytes(data) == 1);
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 1);
+        CHECK(result.second == 1);
+    }
+
+    SUBCASE("Trailing invalid byte") {
+        ByteVec data = {'h', 'e', 0xE4, 0xBD, 0xA0, 0xFF};
+        CHECK(count_valid_bytes(data) == 5);
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 5);
+        CHECK(result.second == 3);
+    }
+
+    SUBCASE("Starts with invalid byte") {
+        ByteVec data = {0xFF, 'A', 'B'};
+        CHECK(count_valid_bytes(data) == 0);
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 0);
+        CHECK(result.second == 0);
+    }
+
+    SUBCASE("Empty input") {
+        ByteVec data;
+        CHECK(count_valid_bytes(data) == 0);
+
+        std::pair<std::size_t, std::size_t> result = count_valid_bytes_chars(data);
+        CHECK(result.first == 0);
+        CHECK(result.second == 0);
+    }
+}
+
 TEST_CASE("encode and decode") {
     CodePoint cp = 0x4F60; // '你'
     UTF8Encoded encoded = encode(cp);
@@ -64,6 +120,75 @@ TEST_CASE("encode and decode") {
     UTF8Encoded enc4 = encode(0x1F600); // 😀 U+1F600
     CHECK(enc4.len == 4);
     CHECK(enc4.bytes[0] == (0xF0 | (0x1F600 >> 18)));
+}
+
+TEST_CASE("encode_all handles mixed valid and invalid codepoints") {
+    const CodePoint GOOD = 0x4F60;      // "你"
+    const CodePoint BAD1 = 0x110000;    // 超出 Unicode 范围
+    const CodePoint BAD2 = 0xD800;      // surrogate
+
+    SUBCASE("All valid") {
+        std::vector<CodePoint> input = {'A', 'B', GOOD};
+        ByteVec encoded = encode_all(input);
+        auto decoded = decode_all(encoded);
+
+        REQUIRE(decoded.size() == 3);
+        CHECK(decoded[0] == 'A');
+        CHECK(decoded[1] == 'B');
+        CHECK(decoded[2] == GOOD);
+    }
+
+    SUBCASE("Starts with invalid") {
+        std::vector<CodePoint> input = {BAD1, 'A', GOOD};
+        ByteVec encoded = encode_all(input);
+        auto decoded = decode_all(encoded);
+
+        REQUIRE(decoded.size() == 3);
+        CHECK(decoded[0] == kstring::ILL_CODEPOINT);
+        CHECK(decoded[1] == 'A');
+        CHECK(decoded[2] == GOOD);
+    }
+
+    SUBCASE("Ends with invalid") {
+        std::vector<CodePoint> input = {'A', GOOD, BAD1};
+        ByteVec encoded = encode_all(input);
+        auto decoded = decode_all(encoded);
+
+        REQUIRE(decoded.size() == 3);
+        CHECK(decoded[0] == 'A');
+        CHECK(decoded[1] == GOOD);
+        CHECK(decoded[2] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Middle invalid") {
+        std::vector<CodePoint> input = {'A', BAD2, GOOD};
+        ByteVec encoded = encode_all(input);
+        auto decoded = decode_all(encoded);
+
+        REQUIRE(decoded.size() == 3);
+        CHECK(decoded[0] == 'A');
+        CHECK(decoded[1] == kstring::ILL_CODEPOINT);
+        CHECK(decoded[2] == GOOD);
+    }
+
+    SUBCASE("Multiple invalids") {
+        std::vector<CodePoint> input = {BAD1, 'X', BAD2, 'Y', BAD1};
+        ByteVec encoded = encode_all(input);
+        auto decoded = decode_all(encoded);
+
+        REQUIRE(decoded.size() == 5);
+        CHECK(decoded[0] == kstring::ILL_CODEPOINT);
+        CHECK(decoded[1] == 'X');
+        CHECK(decoded[2] == kstring::ILL_CODEPOINT);
+        CHECK(decoded[3] == 'Y');
+        CHECK(decoded[4] == kstring::ILL_CODEPOINT);
+    }
+
+    SUBCASE("Empty input") {
+        std::vector<CodePoint> input;
+        ByteVec encoded = encode_all(input);
+        CHECK(encoded.empty());
+    }
 }
 
 TEST_CASE("decode_prev") {

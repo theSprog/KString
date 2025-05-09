@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -10,68 +11,77 @@
 namespace utf8 {
 
 namespace {
-struct Utf8DecodeResult {
-    std::size_t ok_chars;       // 成功处理的 UTF-32 字符数
-    std::size_t consumed_bytes; // 成功消费的 UTF-8 字节数
-    simdutf::error_code error;  // 解码是否失败
+struct Utf8EDResult {
+    std::size_t ok_chars;      // 成功的 UTF-32 字符数
+    std::size_t ok_bytes;      // 成功的 UTF-8 字节数
+    simdutf::error_code error; // 是否失败
 
-    Utf8DecodeResult(std::size_t c, std::size_t b, simdutf::error_code e) : ok_chars(c), consumed_bytes(b), error(e) {}
+    Utf8EDResult(std::size_t c, std::size_t b, simdutf::error_code e) : ok_chars(c), ok_bytes(b), error(e) {}
 
     bool is_ok() {
         return error == simdutf::error_code::SUCCESS;
     }
 };
 
-Utf8DecodeResult decode_valid_prefix(const ByteSpan& input, std::vector<CodePoint>& output) {
-    std::size_t ok_chars = 0;
-    std::size_t consumed_bytes = 0;
-    simdutf::error_code error = simdutf::error_code::SUCCESS;
-    if (input.empty()) return Utf8DecodeResult(0, 0, simdutf::error_code::SUCCESS);
+std::pair<std::size_t, simdutf::error_code> count_valid_bytes_with_error(const ByteSpan& data) {
+    auto result = simdutf::validate_utf8_with_errors(reinterpret_cast<const char*>(data.data()), data.size());
+
+    if (result.is_ok()) {
+        return {data.size(), simdutf::error_code::SUCCESS}; // 全部合法
+    } else {
+        return {result.count, result.error}; // 返回第一个非法字节位置
+    }
+}
+
+std::pair<std::pair<std::size_t, std::size_t>, simdutf::error_code>
+count_valid_bytes_chars_with_error(const ByteSpan& data) {
+    auto valid_bytes_error = count_valid_bytes_with_error(data);
+    assert(valid_bytes_error.first <= data.size());
+    auto valid_chars = simdutf::count_utf8(reinterpret_cast<const char*>(data.data()), valid_bytes_error.first);
+    return {
+        {valid_bytes_error.first, valid_chars},
+        valid_bytes_error.second
+    };
+}
+
+Utf8EDResult decode_valid_prefix(const ByteSpan& input, std::vector<CodePoint>& output) {
+    if (input.empty()) return Utf8EDResult(0, 0, simdutf::error_code::SUCCESS);
+
+    auto bytes_chars_error = count_valid_bytes_chars_with_error(input);
+    std::size_t ok_bytes = bytes_chars_error.first.first;
+    std::size_t ok_chars = bytes_chars_error.first.second;
+    simdutf::error_code error = bytes_chars_error.second;
+    assert(ok_bytes <= input.size());
 
     std::size_t old_size = output.size();
-    output.resize(old_size + input.size()); // 最多扩展 input.size() 个 code point
-
-    auto* out_ptr = reinterpret_cast<char32_t*>(output.data() + old_size);
-    auto* in_ptr = reinterpret_cast<const char*>(input.data());
-
-    simdutf::result res = simdutf::convert_utf8_to_utf32_with_errors(in_ptr, input.size(), out_ptr);
-
-    // 计算成功写入了多少个 code points
-    if (res.is_ok()) {
-        // 成功时 result.count 代表已经写入的字符数
-        ok_chars = res.count;
-        consumed_bytes = input.size();
-        error =  simdutf::error_code::SUCCESS;
-    } else {
-        // 失败时需要手动计算出消费的字符数
-        const char* ptr = reinterpret_cast<const char*>(input.data());
-        if (res.count > 0) {
-            // 处理错误位置之前的有效部分
-            ok_chars = simdutf::count_utf8(ptr, res.count);
-            consumed_bytes = res.count;
-        }
-        error = res.error;
-    }
-
     output.resize(old_size + ok_chars);
-    return Utf8DecodeResult(ok_chars, consumed_bytes, error);
+    auto* out_ptr = reinterpret_cast<char32_t*>(output.data() + old_size);
 
+    auto* in_ptr = reinterpret_cast<const char*>(input.data());
+    auto written_chars = simdutf::convert_utf8_to_utf32(in_ptr, ok_bytes, out_ptr);
+    assert(written_chars == ok_chars);
+    return Utf8EDResult(ok_chars, ok_bytes, error);
 }
 
 // 尝试将 input[in_pos...] 的合法前缀转换为 UTF-8 并写入 output
-inline simdutf::result encode_valid_prefix(kstring::span<const CodePoint> input, ByteVec& output) {
-    if (input.empty()) return {simdutf::error_code::SUCCESS, 0};
-
-    std::size_t old_size = output.size();
-    output.resize(old_size + input.size() * sizeof(CodePoint)); // 最多每个 code point 4 字节
+Utf8EDResult encode_valid_prefix(kstring::span<const CodePoint> input, ByteVec& output) {
+    if (input.empty()) return Utf8EDResult(0, 0, simdutf::error_code::SUCCESS);
 
     auto* in_ptr = reinterpret_cast<const char32_t*>(input.data());
+    auto result = simdutf::validate_utf32_with_errors(in_ptr, input.size());
+    simdutf::error_code error = result.error;
+    std::size_t ok_chars = result.count;
+    assert(ok_chars <= input.size());
+    std::size_t ok_bytes = simdutf::utf8_length_from_utf32(in_ptr, ok_chars);
+
+    std::size_t old_size = output.size();
+    output.resize(old_size + ok_bytes); // 保留写入的部分
+
     auto* out_ptr = reinterpret_cast<char*>(output.data() + old_size);
+    auto written_bytes = simdutf::convert_utf32_to_utf8(in_ptr, ok_chars, out_ptr);
+    assert(ok_bytes == written_bytes);
 
-    simdutf::result res = simdutf::convert_utf32_to_utf8_with_errors(in_ptr, input.size(), out_ptr);
-
-    output.resize(old_size + res.count); // 保留写入的部分
-    return res;
+    return Utf8EDResult(ok_chars, ok_bytes, error);
 }
 
 } // namespace
@@ -87,13 +97,25 @@ std::size_t lead_utf8_length(Byte lead) {
 
 // 获取第一个非法字节位置（返回 -1 表示全部合法）
 std::size_t first_invalid(const ByteSpan& data) {
-    auto result = simdutf::validate_utf8_with_errors(reinterpret_cast<const char*>(data.data()), data.size());
+    auto valid_bytes = count_valid_bytes(data);
+    return valid_bytes == data.size() ? kstring::knpos : valid_bytes;
+}
 
+std::size_t count_valid_bytes(const ByteSpan& data) {
+    auto result = simdutf::validate_utf8_with_errors(reinterpret_cast<const char*>(data.data()), data.size());
+    assert(result.count <= data.size());
     if (result.is_ok()) {
-        return kstring::knpos; // 全部合法
+        return data.size(); // 全部合法
     } else {
         return result.count; // 返回第一个非法字节位置
     }
+}
+
+std::pair<std::size_t, std::size_t> count_valid_bytes_chars(const ByteSpan& data) {
+    auto valid_bytes = count_valid_bytes(data);
+    assert(valid_bytes <= data.size());
+    auto valid_chars = simdutf::count_utf8(reinterpret_cast<const char*>(data.data()), valid_bytes);
+    return {valid_bytes, valid_chars};
 }
 
 // 判断某个位置开始的 len 个字节是否是合法的 UTF-8 编码
@@ -104,7 +126,7 @@ bool is_valid_range(const ByteSpan& data, std::size_t pos, std::size_t len) {
 
 // 是否是合法 UTF-8 编码
 bool is_valid(const ByteSpan& data) {
-    return first_invalid(data) == kstring::knpos;
+    return simdutf::validate_utf8(reinterpret_cast<const char*>(data.data()), data.size());
 }
 
 bool is_surrogate_codepoint(CodePoint cp) {
@@ -137,6 +159,7 @@ std::size_t utf8_size(CodePoint cp) {
 UTF8Encoded encode(CodePoint cp) {
     UTF8Encoded out;
     out.len = utf8_size(cp);
+    assert(out.len <= 4);
 
     if (out.len == 1) {
         out.bytes[0] = static_cast<uint8_t>(cp);
@@ -203,17 +226,15 @@ std::vector<CodePoint> decode_all(const ByteSpan& data) {
     std::size_t size = data.size();
     if (size == 0) return result;
 
-    result.reserve(size); // 最多每个字节对应一个 code point
-
     while (pos < size) {
         ByteSpan input = data.subspan(pos);
         auto res = decode_valid_prefix(input, result);
-        if (res.is_ok()) {
-            break;
-        }
+        assert(res.ok_bytes <= input.size());
+
+        if (res.is_ok()) break;
 
         // 部分成功, 前缀部分已写入 result，跳过成功解码的那段
-        pos += res.consumed_bytes;
+        pos += res.ok_bytes;
         // 此时 pos 就已经是错误编码开始处
         UTF8Decoded bad = decode_one(data, pos);
         result.push_back(kstring::ILL_CODEPOINT);
@@ -227,11 +248,11 @@ ByteVec encode_all(const std::vector<CodePoint>& code_vec) {
     ByteVec result;
     if (code_vec.empty()) return result;
 
-    result.reserve(code_vec.size() * sizeof(CodePoint)); // 预估空间
     kstring::span<const CodePoint> input(code_vec);
     while (! code_vec.empty()) {
-        simdutf::result res = utf8::encode_valid_prefix(input, result);
-
+        auto res = utf8::encode_valid_prefix(input, result);
+        assert(res.ok_chars <= input.size());
+        
         if (res.is_ok()) break;
 
         // fallback: 写入 U+FFFD
@@ -239,7 +260,7 @@ ByteVec encode_all(const std::vector<CodePoint>& code_vec) {
         result.insert(result.end(), fallback.begin(), fallback.end());
 
         // 跳过成功的 + 错误的那个
-        input = input.subspan(res.count + 1);
+        input = input.subspan(res.ok_chars + 1);
     }
 
     return result;
@@ -300,7 +321,7 @@ std::size_t char_count(const ByteSpan& data) {
         // is_err() 部分成功
         // 我们需要确定这个偏移量内有多少个完整字符(此时在偏移量内必然是合法字符)
         // 更新位置到错误处, 开始继续解码
-        pos += result.consumed_bytes;
+        pos += result.ok_bytes;
         UTF8Decoded bad = decode_one(data, pos);
         pos = bad.next_pos;
         count++;
