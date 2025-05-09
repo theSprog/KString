@@ -72,7 +72,8 @@ struct ReverseCharIterator {
     mutable KChar current;
     mutable bool decoded;
 
-    ReverseCharIterator(ByteSpan data, std::size_t end_pos) : data_(data), cur_pos(end_pos), current(), decoded(false) {}
+    ReverseCharIterator(ByteSpan data, std::size_t end_pos)
+        : data_(data), cur_pos(end_pos), current(), decoded(false) {}
 
     KChar operator*() const {
         if (cur_pos == 0) return KChar(); // 到达字符串开头，返回空字符

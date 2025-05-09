@@ -252,7 +252,7 @@ ByteVec encode_all(const std::vector<CodePoint>& code_vec) {
     while (! code_vec.empty()) {
         auto res = utf8::encode_valid_prefix(input, result);
         assert(res.ok_chars <= input.size());
-        
+
         if (res.is_ok()) break;
 
         // fallback: 写入 U+FFFD

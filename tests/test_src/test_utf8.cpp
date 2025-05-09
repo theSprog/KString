@@ -123,9 +123,9 @@ TEST_CASE("encode and decode") {
 }
 
 TEST_CASE("encode_all handles mixed valid and invalid codepoints") {
-    const CodePoint GOOD = 0x4F60;      // "你"
-    const CodePoint BAD1 = 0x110000;    // 超出 Unicode 范围
-    const CodePoint BAD2 = 0xD800;      // surrogate
+    const CodePoint GOOD = 0x4F60;   // "你"
+    const CodePoint BAD1 = 0x110000; // 超出 Unicode 范围
+    const CodePoint BAD2 = 0xD800;   // surrogate
 
     SUBCASE("All valid") {
         std::vector<CodePoint> input = {'A', 'B', GOOD};
