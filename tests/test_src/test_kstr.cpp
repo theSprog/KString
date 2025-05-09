@@ -490,13 +490,12 @@ TEST_CASE("KStr lines handles \\n \\r \\r\\n and trailing newlines") {
     CHECK(lines[3] == "line4");
 }
 
-TEST_CASE("KStr lines trailing line ending results in empty string") {
+TEST_CASE("KStr lines trailing line ending not results in empty string") {
     KStr s("a\nb\n");
     auto lines = s.lines();
-    REQUIRE(lines.size() == 3);
+    REQUIRE(lines.size() == 2);
     CHECK(lines[0] == "a");
     CHECK(lines[1] == "b");
-    CHECK(lines[2] == "");
 }
 
 TEST_CASE("KStr lines empty string returns single empty line") {
@@ -506,19 +505,17 @@ TEST_CASE("KStr lines empty string returns single empty line") {
 }
 
 TEST_CASE("KStr lines with only newlines") {
-    KStr s("\n\r\n\r"); // [1]\n[2]\r\n[3]\r[4]
+    KStr s("\n\r\n\r"); // [1]\n[2]\r\n[3]\r
     auto lines = s.lines();
-    REQUIRE(lines.size() == 4);
+    REQUIRE(lines.size() == 3);
     CHECK(lines[0] == "");
     CHECK(lines[1] == "");
     CHECK(lines[2] == "");
-    CHECK(lines[3] == "");
 
     KStr s2("\n");
     auto lines2 = s2.lines();
-    REQUIRE(lines2.size() == 2);
+    REQUIRE(lines2.size() == 1);
     CHECK(lines2[0] == "");
-    CHECK(lines2[1] == "");
 }
 
 TEST_CASE("KStr match/match_indices basic and edge cases") {

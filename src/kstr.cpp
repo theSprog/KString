@@ -34,7 +34,6 @@ KStr::KStr(ByteSpan bytes) : data_(bytes) {}
 
 bool operator==(const KStr& lhs, const KStr& rhs) {
     if (lhs.data_.size() != rhs.data_.size()) return false;
-    // lhs.data_.size() == rhs.data_.size()
     if (lhs.data_.size() == 0) return true; // 都是空串不用比较
     return std::memcmp(lhs.data_.data(), rhs.data_.data(), lhs.data_.size()) == 0;
 }
@@ -498,7 +497,7 @@ std::vector<KStr> KStr::lines() const {
         }
     }
 
-    if (start <= data_.size()) {
+    if (start < data_.size()) {
         result.emplace_back(&data_[start], data_.size() - start);
     }
 
