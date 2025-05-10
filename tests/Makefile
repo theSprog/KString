@@ -57,7 +57,11 @@ coverage: $(SRC)
 ifneq ($(wildcard $(SRC)),)
 	$(CXX) $(SRC) $(CXXFLAGS) $(CONV_CXXFLAGS) $(LDFLAGS) -o $(BIN)
 	./$(BIN)
-	lcov --quiet --capture --directory ./$(BIN_DIR)/$(TEST_DIR_NAME) --directory ../build/debug --output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --config-file $(PWD)/.lcovrc --ignore-errors unused
+	lcov --quiet --capture \
+		--directory ./$(BIN_DIR)/$(TEST_DIR_NAME) --directory ../build/debug \
+		--output-file $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info \
+		--config-file $(PWD)/.lcovrc \
+		--ignore-errors unused --ignore-errors empty
 	genhtml --quiet $(COVERAGE_DIR)/$(TEST_DIR_NAME)/coverage.info --output-directory $(COVERAGE_DIR)/$(TEST_DIR_NAME)
 	@echo "Coverage report generated for $(TEST) in $(COVERAGE_DIR)/$(TEST)"
 else
