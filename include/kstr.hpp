@@ -1,4 +1,5 @@
 #pragma once
+
 #include "iter.hpp"
 
 namespace kstring {

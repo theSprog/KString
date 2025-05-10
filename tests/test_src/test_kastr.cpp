@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 
-using namespace KAString;
+using namespace kstring;
 
 TEST_CASE("KAStr basic ASCII-only operations") {
     SUBCASE("empty string") {
@@ -47,6 +47,12 @@ TEST_CASE("KAStr basic ASCII-only operations") {
         KAStr s("xyz");
         std::string collect(s.begin(), s.end());
         CHECK(collect == "xyz");
+    }
+
+    SUBCASE("rbegin()/rend() iterators") {
+        KAStr s("xyz");
+        std::string collect(s.rbegin(), s.rend());
+        CHECK(collect == "zyx");
     }
 }
 

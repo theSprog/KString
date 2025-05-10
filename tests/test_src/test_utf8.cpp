@@ -24,6 +24,36 @@ TEST_CASE("codepoint_utf8_size - all branches") {
     CHECK(utf8_size(0x110000) == 0); // invalid > 0x10FFFF
 }
 
+TEST_CASE("valid function correctness") {
+    SUBCASE("is_surrogate_codepoint() correctness") {
+        CHECK(is_surrogate_codepoint(0xD800));
+        CHECK(is_surrogate_codepoint(0xDFFF));
+        CHECK(is_surrogate_codepoint(0xDABC));
+
+        CHECK_FALSE(is_surrogate_codepoint(0xD7FF));
+        CHECK_FALSE(is_surrogate_codepoint(0xE000));
+        CHECK_FALSE(is_surrogate_codepoint(0x0041)); // 'A'
+    }
+
+    SUBCASE("is_overflow_codepoint() correctness") {
+        CHECK_FALSE(is_overflow_codepoint(0x10FFFF)); // max legal
+        CHECK(is_overflow_codepoint(0x110000));       // just above
+        CHECK(is_overflow_codepoint(0x7FFFFFFF));
+    }
+
+    SUBCASE("is_noncharacter() correctness") {
+        CHECK(is_noncharacter(0xFFFE));
+        CHECK(is_noncharacter(0xFFFF));
+        CHECK(is_noncharacter(0x1FFFE));
+        CHECK(is_noncharacter(0x10FFFE));
+        CHECK(is_noncharacter(0x10FFFF));
+
+        CHECK_FALSE(is_noncharacter(0x10FFFD));
+        CHECK_FALSE(is_noncharacter(0x0041));   // 'A'
+        CHECK_FALSE(is_noncharacter(0x110000)); // overflow — excluded
+    }
+}
+
 TEST_CASE("is_valid_range") {
     ByteVec valid = {0xE4, 0xBD, 0xA0}; // "你"
     CHECK(is_valid_range(valid, 0, 3));
@@ -331,6 +361,7 @@ TEST_CASE("find") {
     CHECK(find_codepoint(data, 'a') == 0);
     CHECK(find_codepoint(data, 0x4F60) == 1);
     CHECK(find_codepoint(data, 'x') == kstring::knpos);
+    CHECK(find_codepoint(data, 0x4F61) == kstring::knpos);
 }
 
 TEST_CASE("replace_at") {
@@ -547,6 +578,13 @@ TEST_CASE("print UTF8Encoded & UTF8Decoded") {
     oss2 << err;
     CHECK(oss1.str() == "UTF8Decoded{cp=U+4F60, next_pos=3, ok=true}");
     CHECK(oss2.str() == "UTF8Decoded{<invalid>}");
+
+    UTF8Encoded ill = encode(kstring::ILL_CODEPOINT);
+    UTF8Encoded FF_ill = encode(0x110000);
+    REQUIRE(FF_ill.len == ill.len);
+    for (std::size_t i = 0; i < ill.len; i++) {
+        CHECK(FF_ill.bytes[i] == ill.bytes[i]);
+    }
 }
 
 TEST_CASE("decode_all normal completely testing") {

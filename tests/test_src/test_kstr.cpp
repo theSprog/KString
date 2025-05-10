@@ -214,6 +214,16 @@ TEST_CASE("KStr find/rfind/contains") {
     SUBCASE("pattern too long") {
         CHECK(KStr("a").find(("abc")) == kstring::knpos);
     }
+
+    SUBCASE("[r]find_in_bytes") {
+        CHECK(KStr("abcde").find_in_bytes(("a")) == 0);
+        CHECK(KStr("abcde").find_in_bytes(("c")) == 2);
+        CHECK(KStr("abcde").find_in_bytes(("e")) == 4);
+
+        CHECK(KStr("abcde").rfind_in_bytes(("a")) == 0);
+        CHECK(KStr("abcde").rfind_in_bytes(("c")) == 2);
+        CHECK(KStr("abcde").rfind_in_bytes(("e")) == 4);
+    }
 }
 
 TEST_CASE("test byte_offset_to_char_index") {

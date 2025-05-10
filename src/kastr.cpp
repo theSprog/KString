@@ -1,9 +1,7 @@
 #include "../include/kastr.hpp"
 #include <stdexcept>
 
-namespace KAString {
-using kstring::Byte;
-
+namespace kstring {
 std::size_t KAStr::find(KAStr substr) const {
     if (substr.byte_size() == 0) return 0;
     if (substr.byte_size() > byte_size()) return kstring::knpos;
@@ -59,24 +57,6 @@ KAStr KAStr::subrange(std::size_t start, std::size_t end) const {
 
 KAStr KAStr::subrange(std::size_t start) const {
     return subrange(start, byte_size());
-}
-
-bool operator==(const KAStr& lhs, const KAStr& rhs) {
-    if (lhs.byte_size() != rhs.byte_size()) return false;
-    if (lhs.byte_size() == 0) return true; // 都是空串
-    return lhs.byte_size() == rhs.byte_size() && std::memcmp(lhs.begin(), rhs.begin(), lhs.byte_size()) == 0;
-}
-
-bool operator!=(const KAStr& lhs, const KAStr& rhs) {
-    return ! (lhs == rhs);
-}
-
-bool operator==(const KAStr& lhs, const char* rhs) {
-    return lhs == KAStr(rhs);
-}
-
-std::ostream& operator<<(std::ostream& os, const KAStr& s) {
-    return os.write(reinterpret_cast<const char*>(s.begin()), s.byte_size());
 }
 
 std::pair<KAStr, KAStr> KAStr::split_at(std::size_t mid) const {
@@ -243,5 +223,5 @@ KAStr KAStr::trim() const {
 }
 
 
-}; // namespace KAString
+}; // namespace kstring
 

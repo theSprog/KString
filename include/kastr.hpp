@@ -1,11 +1,13 @@
+#pragma once
+
 #include "base.hpp"
 #include <cstring>
 #include <stdexcept>
 #include <string>
 #include <ostream>
 
-namespace KAString {
-using kstring::Byte;
+namespace kstring {
+class KAString;
 
 // ascii-only string, read-only and hasn't ownership
 class KAStr {
@@ -19,6 +21,10 @@ class KAStr {
     KAStr(const char* ptr, std::size_t len) : data_(reinterpret_cast<const Byte*>(ptr), len) {}
 
     KAStr(const Byte* ptr, std::size_t len) : data_(ptr, len) {}
+
+    operator std::string() const {
+        return std::string(reinterpret_cast<const char*>(data_.data()), data_.size());
+    }
 
     bool empty() const {
         return data_.empty();
@@ -36,16 +42,22 @@ class KAStr {
         return data_.data();
     }
 
-    std::string to_string() const {
-        return std::string(reinterpret_cast<const char*>(data_.data()), data_.size());
-    }
-
     const Byte* begin() const {
         return data_.begin();
     }
 
     const Byte* end() const {
         return data_.end();
+    }
+
+    using const_reverse_iterator = std::reverse_iterator<const Byte*>;
+
+    const_reverse_iterator rbegin() const {
+        return const_reverse_iterator(end());
+    }
+
+    const_reverse_iterator rend() const {
+        return const_reverse_iterator(begin());
     }
 
     uint8_t byte_at(std::size_t idx) const {
@@ -57,6 +69,24 @@ class KAStr {
 
     char operator[](std::size_t idx) const {
         return static_cast<char>(byte_at(idx));
+    }
+
+    friend bool operator==(const KAStr& lhs, const KAStr& rhs) {
+        if (lhs.byte_size() != rhs.byte_size()) return false;
+        if (lhs.byte_size() == 0) return true; // 都是空串
+        return lhs.byte_size() == rhs.byte_size() && std::memcmp(lhs.begin(), rhs.begin(), lhs.byte_size()) == 0;
+    }
+
+    friend bool operator!=(const KAStr& lhs, const KAStr& rhs) {
+        return ! (lhs == rhs);
+    }
+
+    friend bool operator==(const KAStr& lhs, const char* rhs) {
+        return lhs == KAStr(rhs);
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const KAStr& s) {
+        return os.write(reinterpret_cast<const char*>(s.begin()), s.byte_size());
     }
 
     std::size_t find(KAStr substr) const;
@@ -74,14 +104,6 @@ class KAStr {
 
     KAStr subrange(std::size_t start, std::size_t end) const;
     KAStr subrange(std::size_t start) const;
-
-    friend bool operator==(const KAStr& lhs, const KAStr& rhs);
-
-    friend bool operator!=(const KAStr& lhs, const KAStr& rhs);
-
-    friend bool operator==(const KAStr& lhs, const char* rhs);
-
-    friend std::ostream& operator<<(std::ostream& os, const KAStr& s);
 
     std::pair<KAStr, KAStr> split_at(std::size_t mid) const;
 
@@ -166,4 +188,23 @@ class KAStr {
     kstring::ByteSpan data_;
 };
 
-} // namespace KAString
+template <typename ByteRange>
+inline std::size_t fnv1a_hash(const ByteRange& r) {
+    // 推荐方式：使用 FNV-1a 哈希
+    std::size_t h = 14695981039346656037ull;
+    for (auto b : r) {
+        h ^= static_cast<std::uint8_t>(b);
+        h *= 1099511628211ull;
+    }
+    return h;
+}
+} // namespace kstring
+
+namespace std {
+template <>
+struct hash<kstring::KAStr> {
+    std::size_t operator()(const kstring::KAStr& s) const {
+        return kstring::fnv1a_hash(s);
+    }
+};
+} // namespace std

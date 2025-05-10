@@ -548,8 +548,15 @@ TEST_CASE("iterator correctness") {
     CHECK(iter == ref);
 
     iter.clear();
-    for (const auto b : s) {
+    const SSOBytes s2(s);
+    for (const auto b : s2) {
         iter += static_cast<char>(b);
+    }
+    CHECK(iter == ref);
+
+    iter.clear();
+    for(auto it = s2.cbegin(); it != s2.cend(); it++) {
+        iter += static_cast<char>(*it);
     }
     CHECK(iter == ref);
 }
