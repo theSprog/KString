@@ -1,6 +1,7 @@
+#include <string>
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
-#include "../../src/sso.hpp"
+#include "../../include/sso.hpp"
 
 using kstring::Byte;
 using kstring::SSOBytes;
@@ -171,9 +172,10 @@ TEST_CASE("clear() should reset state") {
     CHECK(s.size() == 0);
     CHECK(s.is_sso());
 
-    SSOBytes heap("heap", 100);
+    SSOBytes heap("heap");
+    heap.resize(100);
     CHECK(! heap.empty());
-    CHECK(heap.size() == 4 * 100);
+    CHECK(heap.size() == 100);
     CHECK(! heap.is_sso());
     heap.clear();
     CHECK(heap.empty());
@@ -414,47 +416,7 @@ TEST_CASE("assign(initializer_list)") {
     CHECK(std::string(s.begin(), s.end()) == "xyz");
 }
 
-TEST_CASE("SSOBytes(Byte ch, size_t count)") {
-    SUBCASE("Construct with small count (SSO)") {
-        SSOBytes s('x', 5);
-        CHECK(s.size() == 5);
-        for (auto b : s) CHECK(b == 'x');
-        CHECK(s.capacity() >= s.size());
-    }
-
-    SUBCASE("Construct with large count (heap)") {
-        SSOBytes s('y', SSOBytes::SSO_CAPACITY + 10);
-        CHECK(s.size() == SSOBytes::SSO_CAPACITY + 10);
-        for (auto b : s) CHECK(b == 'y');
-        CHECK(! s.empty());
-    }
-
-    SUBCASE("Construct with count == 0") {
-        SSOBytes s('z', 0);
-        CHECK(s.size() == 0);
-        CHECK(s.empty());
-    }
-}
-
 TEST_CASE("SSOBytes(char* pattern, size_t count)") {
-    SUBCASE("SSO repeated pattern") {
-        SSOBytes s("ab", 3); // "ababab"
-        CHECK(s.size() == 6);
-        CHECK(std::string(s.begin(), s.end()) == "ababab");
-    }
-
-    SUBCASE("Heap repeated pattern") {
-        std::string pattern = "abc";
-        SSOBytes s(pattern.c_str(), SSOBytes::SSO_CAPACITY); // should trigger heap
-        CHECK(s.size() > SSOBytes::SSO_CAPACITY);
-        for (size_t i = 0; i < s.size(); i += 3) CHECK(std::string(s.begin() + i, s.begin() + i + 3) == "abc");
-    }
-
-    SUBCASE("Empty pattern") {
-        SSOBytes s("", 100);
-        CHECK(s.empty());
-    }
-
     SUBCASE("Null pattern") {
         const char* nullstr = nullptr;
         SSOBytes s(nullstr, 10); // must not crash
@@ -487,7 +449,7 @@ TEST_CASE("SSOBytes(const std::string&)") {
 }
 
 TEST_CASE("shrink_to_fit works for heap mode only") {
-    SSOBytes s('x', SSOBytes::SSO_CAPACITY + 100); // force heap
+    SSOBytes s(std::string('x', SSOBytes::SSO_CAPACITY + 100)); // force heap
     auto old_capacity = s.capacity();
     s.resize(s.size() / 2); // shrink
     s.shrink_to_fit();
@@ -508,8 +470,10 @@ TEST_CASE("swap: SSO <-> SSO") {
 }
 
 TEST_CASE("swap: heap <-> heap") {
-    SSOBytes a("abc", SSOBytes::SSO_CAPACITY); // heap
-    SSOBytes b("xyz", SSOBytes::SSO_CAPACITY); // heap
+    SSOBytes a("abc");
+    a.resize(100); // heap
+    SSOBytes b("xyz");
+    b.resize(100); // heap
 
     a.swap(b);
     CHECK(std::string(a.begin(), a.begin() + 3) == "xyz");
@@ -518,7 +482,8 @@ TEST_CASE("swap: heap <-> heap") {
 
 TEST_CASE("swap: SSO <-> heap") {
     SSOBytes a("abc");
-    SSOBytes b("xyz", SSOBytes::SSO_CAPACITY);
+    SSOBytes b("xyz");
+    b.resize(100);
     bool a_sso = a.is_sso();
     bool b_sso = b.is_sso();
 
@@ -555,7 +520,7 @@ TEST_CASE("iterator correctness") {
     CHECK(iter == ref);
 
     iter.clear();
-    for(auto it = s2.cbegin(); it != s2.cend(); it++) {
+    for (auto it = s2.cbegin(); it != s2.cend(); it++) {
         iter += static_cast<char>(*it);
     }
     CHECK(iter == ref);

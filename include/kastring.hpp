@@ -9,26 +9,24 @@
 #include <ostream>
 
 #include "./kastr.hpp"
+#include "./sso.hpp"
 
 namespace kstring {
 class KAString {
   public:
     KAString() : data_() {}
 
-    KAString(const char* cstr)
-        : data_(reinterpret_cast<const Byte*>(cstr), reinterpret_cast<const Byte*>(cstr) + std::strlen(cstr)) {}
+    KAString(const char* cstr) : data_(cstr) {}
 
-    KAString(const std::string& str)
-        : data_(reinterpret_cast<const Byte*>(str.data()), reinterpret_cast<const Byte*>(str.data() + str.size())) {}
+    KAString(const std::string& str) : data_(str) {}
 
-    KAString(const char* ptr, std::size_t len)
-        : data_(reinterpret_cast<const Byte*>(ptr), reinterpret_cast<const Byte*>(ptr + len)) {}
+    KAString(const char* ptr, std::size_t len) : data_(ptr, len) {}
 
-    KAString(const Byte* ptr, std::size_t len) : data_(ptr, ptr + len) {}
+    KAString(const Byte* ptr, std::size_t len) : data_(ptr, len) {}
 
     KAString(std::initializer_list<Byte> vec) : data_(vec) {}
 
-    KAString(KAStr kastr) : data_(kastr.data(), kastr.data() + kastr.byte_size()) {}
+    KAString(KAStr kastr) : data_(kastr.data(), kastr.byte_size()) {}
 
     // 拷贝构造/赋值, 移动构造/赋值, 析构
     KAString(const KAString&) = default;
@@ -111,8 +109,8 @@ class KAString {
     friend KAString operator+(const KAString& lhs, const KAString& rhs) {
         KAString result;
         result.data_.reserve(lhs.byte_size() + rhs.byte_size());
-        result.data_.insert(result.data_.end(), lhs.begin(), lhs.end());
-        result.data_.insert(result.data_.end(), rhs.begin(), rhs.end());
+        result.append(lhs);
+        result.append(rhs);
         return result;
     }
 
@@ -196,15 +194,15 @@ class KAString {
 
     void append(const char* ptr, std::size_t len) {
         if (ptr == nullptr || len == 0) return;
-        data_.insert(data_.end(), reinterpret_cast<const Byte*>(ptr), reinterpret_cast<const Byte*>(ptr + len));
+        data_.append(reinterpret_cast<const Byte*>(ptr), len);
     }
 
     void append(const KAString& other) {
-        data_.insert(data_.end(), other.begin(), other.end());
+        data_.append(other.begin(), other.byte_size());
     }
 
     void append(const KAStr& strview) {
-        data_.insert(data_.end(), strview.begin(), strview.end());
+        data_.append(strview.begin(), strview.byte_size());
     }
 
     int compare(const KAString& other) const {
@@ -421,7 +419,7 @@ class KAString {
     }
 
   private:
-    std::vector<Byte> data_;
+    SSOBytes data_;
 };
 } // namespace kstring
 

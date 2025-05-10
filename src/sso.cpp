@@ -3,163 +3,6 @@
 #include "sso.hpp"
 
 namespace kstring {
-bool SSOBytes::is_sso() const {
-    const uint8_t tag_value = heap.tag; // 强制访问为 heap 联合成员
-    return (tag_value & kHeapFlag) == 0;
-}
-
-SSOBytes::~SSOBytes() {
-    if (! is_sso()) {
-        heap.vec.~vector();
-    }
-}
-
-// 默认构造
-SSOBytes::SSOBytes() {
-    sso.len = 0;
-    heap.tag = 0;
-}
-
-SSOBytes::SSOBytes(Byte ch) : SSOBytes(ch, 1) {}
-
-SSOBytes::SSOBytes(const char* pattern) : SSOBytes(pattern, 1) {}
-
-SSOBytes::SSOBytes(const std::string& pattern) : SSOBytes(pattern.c_str(), 1) {}
-
-// 构造 n 个相同字节
-SSOBytes::SSOBytes(Byte ch, std::size_t repeat) {
-    if (repeat <= SSO_CAPACITY) {
-        sso.len = static_cast<uint8_t>(repeat);
-        std::fill(sso.data, sso.data + repeat, ch);
-    } else {
-        new (&heap.vec) std::vector<Byte>(repeat, ch);
-        heap.tag = kHeapFlag;
-    }
-}
-
-// 构造 n 次 pattern 重复（pattern 为 C 字符串）
-SSOBytes::SSOBytes(const char* pattern, std::size_t repeat) {
-    if (! pattern || *pattern == '\0' || repeat == 0) {
-        sso.len = 0;
-        return;
-    }
-
-    std::size_t pat_len = std::strlen(pattern);
-    std::size_t total = pat_len * repeat;
-
-    if (total <= SSO_CAPACITY) {
-        for (std::size_t i = 0; i < repeat; ++i) std::memcpy(sso.data + i * pat_len, pattern, pat_len);
-        sso.len = static_cast<uint8_t>(total);
-    } else {
-        new (&heap.vec) std::vector<Byte>();
-        heap.vec.reserve(total);
-        for (std::size_t i = 0; i < repeat; ++i) heap.vec.insert(heap.vec.end(), pattern, pattern + pat_len);
-        heap.tag = kHeapFlag;
-    }
-}
-
-SSOBytes::SSOBytes(const SSOBytes& other) {
-    if (other.is_sso()) {
-        std::memcpy(sso.data, other.sso.data, other.sso.len);
-        sso.len = other.sso.len;
-    } else {
-        new (&heap.vec) std::vector<Byte>(other.heap.vec);
-        heap.tag = kHeapFlag;
-    }
-}
-
-SSOBytes& SSOBytes::operator=(const SSOBytes& other) {
-    if (this == &other) return *this;
-    this->~SSOBytes();
-    new (this) SSOBytes(other);
-    return *this;
-}
-
-SSOBytes::SSOBytes(SSOBytes&& other) noexcept {
-    if (other.is_sso()) {
-        std::memcpy(sso.data, other.sso.data, other.sso.len);
-        sso.len = other.sso.len;
-    } else {
-        new (&heap.vec) std::vector<Byte>(std::move(other.heap.vec));
-        heap.tag = kHeapFlag;
-    }
-}
-
-SSOBytes& SSOBytes::operator=(SSOBytes&& other) noexcept {
-    if (this == &other) return *this;
-    this->~SSOBytes();
-    new (this) SSOBytes(std::move(other));
-    return *this;
-}
-
-bool SSOBytes::operator==(const SSOBytes& other) const {
-    if (size() != other.size()) return false;
-    const Byte* lhs = data();
-    const Byte* rhs = other.data();
-    return std::equal(lhs, lhs + size(), rhs);
-}
-
-bool SSOBytes::operator!=(const SSOBytes& other) const {
-    return ! (*this == other);
-}
-
-Byte& SSOBytes::operator[](std::size_t idx) {
-    return is_sso() ? reinterpret_cast<Byte&>(sso.data[idx]) : heap.vec[idx];
-}
-
-const Byte& SSOBytes::operator[](std::size_t idx) const {
-    return is_sso() ? reinterpret_cast<const Byte&>(sso.data[idx]) : heap.vec[idx];
-}
-
-Byte& SSOBytes::at(std::size_t idx) {
-    if (idx >= size()) throw std::out_of_range("SSOBytes::at()");
-    return (*this)[idx];
-}
-
-std::size_t SSOBytes::size() const {
-    return is_sso() ? sso.len : heap.vec.size();
-}
-
-std::size_t SSOBytes::capacity() const {
-    return is_sso() ? SSO_CAPACITY : heap.vec.capacity();
-}
-
-bool SSOBytes::empty() const {
-    return size() == 0;
-}
-
-Byte* SSOBytes::data() {
-    return is_sso() ? reinterpret_cast<Byte*>(sso.data) : heap.vec.data();
-}
-
-const Byte* SSOBytes::data() const {
-    return is_sso() ? reinterpret_cast<const Byte*>(sso.data) : heap.vec.data();
-}
-
-Byte& SSOBytes::front() {
-    return is_sso() ? reinterpret_cast<Byte&>(sso.data[0]) : heap.vec.front();
-}
-
-const Byte& SSOBytes::front() const {
-    return is_sso() ? reinterpret_cast<const Byte&>(sso.data[0]) : heap.vec.front();
-}
-
-Byte& SSOBytes::back() {
-    return is_sso() ? reinterpret_cast<Byte&>(sso.data[sso.len - 1]) : heap.vec.back();
-}
-
-const Byte& SSOBytes::back() const {
-    return is_sso() ? reinterpret_cast<const Byte&>(sso.data[sso.len - 1]) : heap.vec.back();
-}
-
-void SSOBytes::clear() {
-    if (is_sso()) {
-        sso.len = 0;
-    } else {
-        heap.vec.clear();
-    }
-}
-
 void SSOBytes::push_back(Byte byte) {
     if (is_sso()) {
         if (sso.len < SSO_CAPACITY) {
@@ -222,6 +65,7 @@ void SSOBytes::insert(std::size_t pos, Byte byte) {
     }
 }
 
+// void resize(std::size_t n, Byte val = 0);
 void SSOBytes::resize(std::size_t n, Byte val) {
     if (! is_sso()) {
         heap.vec.resize(n, val);
@@ -286,33 +130,5 @@ void SSOBytes::swap(SSOBytes& other) noexcept {
         *this = std::move(other);
         other = std::move(tmp);
     }
-}
-
-void swap(SSOBytes& lhs, SSOBytes& rhs) noexcept {
-    lhs.swap(rhs);
-}
-
-SSOBytes::iterator SSOBytes::begin() {
-    return data();
-}
-
-SSOBytes::iterator SSOBytes::end() {
-    return data() + size();
-}
-
-SSOBytes::const_iterator SSOBytes::begin() const {
-    return data();
-}
-
-SSOBytes::const_iterator SSOBytes::end() const {
-    return data() + size();
-}
-
-SSOBytes::const_iterator SSOBytes::cbegin() const {
-    return begin();
-}
-
-SSOBytes::const_iterator SSOBytes::cend() const {
-    return end();
 }
 }; // namespace kstring
